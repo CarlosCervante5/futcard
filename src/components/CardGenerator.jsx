@@ -17,7 +17,7 @@ if (!API_BASE_URL) {
   }
 }
 
-const CardGenerator = ({ player, onUpdatePlayer }) => {
+const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
   const [isCroppingAI, setIsCroppingAI] = useState(false);
   const [cropSuccess, setCropSuccess] = useState('');
   const fileInputRef = useRef(null);
@@ -368,13 +368,17 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
 
   return (
     <div style={{ paddingBottom: '32px' }}>
-      <h2 className="section-title">
-        <Star size={18} fill="currentColor" color="var(--primary)" />
-        Mi Card Studio
-      </h2>
+      {!embedded && (
+        <>
+          <h2 className="section-title">
+            <Star size={18} fill="currentColor" color="var(--primary)" />
+            Mi Card Studio
+          </h2>
 
-      {/* Main card preview with metallic shimmer */}
-      <PlayerCard player={player} />
+          {/* Main card preview with metallic shimmer */}
+          <PlayerCard player={player} />
+        </>
+      )}
 
       <div className="glass-panel" style={{ marginTop: '24px' }}>
         <h3 style={{ fontSize: '15px', marginBottom: '14px', textTransform: 'uppercase', fontFamily: 'var(--font-heading)' }}>

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ShieldCheck, Calendar, Trophy, MessageSquare, Plus, Trash2, Award, ClipboardCheck } from 'lucide-react';
 import RadarChart from './RadarChart';
 import PlayerCard from './PlayerCard';
+import CardGenerator from './CardGenerator';
 
 const RoleManager = ({
   player,
@@ -14,6 +15,7 @@ const RoleManager = ({
   const [newTeam, setNewTeam] = useState({ club: '', period: '', stats: '', achievements: '' });
   const [showAddTeamForm, setShowAddTeamForm] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [playerSubTab, setPlayerSubTab] = useState('profile'); // 'profile' or 'design'
 
   // Sharing profiles via WhatsApp helper
   const handleWhatsAppShare = () => {
@@ -66,12 +68,62 @@ const RoleManager = ({
       {/* 1. PLAYER DISPLAY LAYOUT */}
       {activeUser.role === 'player' && (
         <div>
-          <h2 className="section-title">Mi Ficha Digital</h2>
+          <h2 className="section-title">Mi Tarjeta Digital</h2>
           
           <PlayerCard player={player} />
 
-          {/* WhatsApp share panel */}
-          <div className="glass-panel text-center">
+          {/* Segmented Sub-Tab Switcher for "Mi Tarjeta" Merged View */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', background: 'rgba(0,0,0,0.3)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <button
+              onClick={() => setPlayerSubTab('profile')}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: playerSubTab === 'profile' ? 'var(--primary)' : 'none',
+                color: playerSubTab === 'profile' ? '#121414' : 'var(--text-secondary)',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              <ClipboardCheck size={14} />
+              Ficha y Avales
+            </button>
+            <button
+              onClick={() => setPlayerSubTab('design')}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: playerSubTab === 'design' ? 'var(--primary)' : 'none',
+                color: playerSubTab === 'design' ? '#121414' : 'var(--text-secondary)',
+                fontSize: '12px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px'
+              }}
+            >
+              <Award size={14} />
+              Editar Diseño
+            </button>
+          </div>
+
+          {playerSubTab === 'profile' && (
+            <>
+              {/* WhatsApp share panel */}
+              <div className="glass-panel text-center">
             <h3 style={{ fontSize: '15px', marginBottom: '8px' }}>Compartir Ficha Profesional</h3>
             <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
               Copia el enlace de tu perfil y compártelo por WhatsApp. Tus amigos, directores técnicos o ligas locales podrán avalar tus habilidades desde cualquier dispositivo.
@@ -209,6 +261,16 @@ const RoleManager = ({
               )}
             </div>
           </div>
+            </>
+          )}
+
+          {playerSubTab === 'design' && (
+            <CardGenerator
+              player={player}
+              onUpdatePlayer={onUpdatePlayer}
+              embedded={true}
+            />
+          )}
         </div>
       )}
 

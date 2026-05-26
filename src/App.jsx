@@ -322,16 +322,8 @@ function App() {
               </div>
             )}
 
-            {/* View TAB: Card Generator Studio */}
+            {/* View TAB: Mi Tarjeta (Merged Generator & Profile) */}
             {activeTab === 'studio' && (
-              <CardGenerator
-                player={myPlayerProfile}
-                onUpdatePlayer={handleUpdatePlayer}
-              />
-            )}
-
-            {/* View TAB: My Profile view tailored to active roles */}
-            {activeTab === 'my-profile' && (
               <RoleManager
                 player={myPlayerProfile}
                 dt={db.dts[0]}
@@ -386,16 +378,8 @@ function App() {
             className={`tab-btn ${activeTab === 'studio' ? 'active' : ''}`}
             id="tab-generator"
           >
-            <Sparkles />
-            Mi Card
-          </button>
-          <button
-            onClick={() => setActiveTab('my-profile')}
-            className={`tab-btn ${activeTab === 'my-profile' ? 'active' : ''}`}
-            id="tab-profile"
-          >
             <User />
-            Mi Ficha
+            Mi Tarjeta
           </button>
           <button
             onClick={() => setActiveTab('league-panel')}
