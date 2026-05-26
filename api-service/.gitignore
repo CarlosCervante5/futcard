@@ -7,3 +7,4 @@ jwt_secret.txt
 
 # Databases
 db.json
+data/

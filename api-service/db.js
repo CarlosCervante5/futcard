@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const DB_FILE = path.join(__dirname, 'db.json');
+const DB_DIR = process.env.DB_DIR || path.join(__dirname, 'data');
+const DB_FILE = path.join(DB_DIR, 'db.json');
 
 const DEFAULT_PLAYERS = [
   {
@@ -125,8 +126,26 @@ const DEFAULT_BACKGROUNDS = [
 ];
 
 function initDb() {
-  if (!fs.existsSync(DB_FILE)) {
-    const defaultData = {
+  // Ensure the database directory exists (useful for persistent volume mounts)
+  if (!fs.existsSync(DB_DIR)) {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+    console.log(`📁 [DATABASE VOLUME]: Created persistent directory at ${DB_DIR}`);
+  }
+
+  let dbData = null;
+  let needsWrite = false;
+
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      const content = fs.readFileSync(DB_FILE, 'utf-8');
+      dbData = JSON.parse(content);
+    } catch (err) {
+      console.error('⚠️ [DATABASE CORRUPTION]: Failed to parse db.json. Restoring fallback defaults.', err);
+    }
+  }
+
+  if (!dbData) {
+    dbData = {
       players: DEFAULT_PLAYERS,
       dts: DEFAULT_DTS,
       referees: DEFAULT_REFEREES,
@@ -136,9 +155,42 @@ function initDb() {
       auditLogs: [],
       geminiKey: ''
     };
-    fs.writeFileSync(DB_FILE, JSON.stringify(defaultData, null, 2), 'utf-8');
+    needsWrite = true;
+    console.log('🌱 [DATABASE SEED]: Database file was missing. Successfully seeded default sports & administrator records!');
+  } else {
+    // Automated schema migrations (Ensure missing fields / collections are created safely)
+    const schemaDefaults = {
+      players: DEFAULT_PLAYERS,
+      dts: DEFAULT_DTS,
+      referees: DEFAULT_REFEREES,
+      leagues: DEFAULT_LEAGUES,
+      admins: DEFAULT_ADMINS,
+      backgrounds: DEFAULT_BACKGROUNDS,
+      auditLogs: [],
+      geminiKey: ''
+    };
+
+    for (const [key, defaultValue] of Object.entries(schemaDefaults)) {
+      if (dbData[key] === undefined) {
+        dbData[key] = defaultValue;
+        needsWrite = true;
+        console.log(`🔧 [DATABASE MIGRATION]: Added missing schema collection: "${key}"`);
+      }
+    }
+  }
+
+  if (needsWrite) {
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), 'utf-8');
+      console.log('💾 [DATABASE WRITER]: Database changes/seeds written to disk.');
+    } catch (err) {
+      console.error('🚨 [DATABASE ERROR]: Failed to write seeded database to disk:', err);
+    }
   }
 }
+
+// Call initDb immediately upon loading module to trigger automatic migrations and seeding
+initDb();
 
 function readDb() {
   initDb();

@@ -32,8 +32,18 @@ app.use(helmet());
 // Express JSON limit set to 5MB to accommodate base64 background visual assets safely
 app.use(express.json({ limit: '5mb' }));
 
-// Restrict CORS origins strictly to local frontends
-const allowedOrigins = ['http://localhost:5173', 'http://localhost:5174'];
+// Restrict CORS origins strictly to local and configured production frontends
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174'
+];
+if (process.env.ALLOWED_ORIGINS) {
+  const customOrigins = process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim());
+  allowedOrigins.push(...customOrigins);
+}
+
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
@@ -498,7 +508,8 @@ app.post('/api/federation/reset', authenticateToken, (req, res) => {
   res.json({ success: true, message: 'Base de datos federativa re-sembrada con éxito.' });
 });
 
-// Start Express Server listening on Localhost strictly
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`🚀 [EXPRESS BACKEND LIVE]: Listening at http://127.0.0.1:${PORT}`);
+// Start Express Server listening on configured host (supports local security and Railway container enrouting)
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 [EXPRESS BACKEND LIVE]: Listening at http://${HOST}:${PORT}`);
 });
