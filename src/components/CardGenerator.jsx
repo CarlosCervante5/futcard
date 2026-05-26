@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Sparkles, Download, RefreshCw, Star } from 'lucide-react';
 import PlayerCard from './PlayerCard';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000';
+
 const CardGenerator = ({ player, onUpdatePlayer }) => {
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [prompt, setPrompt] = useState(player.aiPrompt || '');
@@ -91,7 +93,7 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
     setSuccessMsg('');
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/cards/generate-ai', {
+      const response = await fetch(`${API_BASE_URL}/api/cards/generate-ai`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

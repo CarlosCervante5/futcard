@@ -17,6 +17,8 @@ const MOCK_DB_KEYS = {
   backgrounds: 'futcard_all_backgrounds'
 };
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000';
+
 function App() {
   const [db, setDb] = useState({ players: [], dts: [], referees: [], leagues: [] });
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,7 +120,7 @@ function App() {
   const loadData = async (token = authToken) => {
     try {
       // 1. Fetch federated data
-      const resFed = await fetch('http://127.0.0.1:5000/api/federation');
+      const resFed = await fetch(API_BASE_URL + '/api/federation');
       if (resFed.ok) {
         const dataFed = await resFed.json();
         setDb(dataFed);
@@ -130,7 +132,7 @@ function App() {
       }
 
       // 2. Fetch backgrounds
-      const resBgs = await fetch('http://127.0.0.1:5000/api/backgrounds');
+      const resBgs = await fetch(API_BASE_URL + '/api/backgrounds');
       if (resBgs.ok) {
         const dataBgs = await resBgs.json();
         setBackgroundsList(dataBgs);
@@ -139,7 +141,7 @@ function App() {
 
       // 3. Fetch audit logs (Requires Auth)
       if (token) {
-        const resLogs = await fetch('http://127.0.0.1:5000/api/audit-logs', {
+        const resLogs = await fetch(API_BASE_URL + '/api/audit-logs', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (resLogs.ok) {
@@ -150,7 +152,7 @@ function App() {
         // Fetch admins (Super Admin only)
         const activeUser = JSON.parse(sessionStorage.getItem('futcard_active_admin') || '{}');
         if (activeUser.role === 'Super Admin') {
-          const resAdmins = await fetch('http://127.0.0.1:5000/api/admins', {
+          const resAdmins = await fetch(API_BASE_URL + '/api/admins', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (resAdmins.ok) {
@@ -176,7 +178,7 @@ function App() {
     // Sync to backend via secure API synchronization endpoint
     if (authToken) {
       try {
-        await fetch('http://127.0.0.1:5000/api/federation/sync', {
+        await fetch(API_BASE_URL + '/api/federation/sync', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -195,7 +197,7 @@ function App() {
   const logAuditAction = async (email, details) => {
     if (authToken) {
       try {
-        await fetch('http://127.0.0.1:5000/api/audit-logs', {
+        await fetch(API_BASE_URL + '/api/audit-logs', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -216,7 +218,7 @@ function App() {
     if (!loginEmail.trim() || !loginPassword.trim()) return;
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/auth/login', {
+      const response = await fetch(API_BASE_URL + '/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: loginEmail, password: loginPassword })
@@ -486,7 +488,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/admins', {
+      const response = await fetch(API_BASE_URL + '/api/admins', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -527,7 +529,7 @@ function App() {
     if (!window.confirm(`¿Estás seguro que deseas dar de baja a la cuenta de admin "${name}"?`)) return;
 
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/admins/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/admins/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
@@ -554,7 +556,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/config/gemini-key', {
+      const response = await fetch(API_BASE_URL + '/api/config/gemini-key', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -587,7 +589,7 @@ function App() {
     setDiagnosticResult(null);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/config/test-gemini', {
+      const response = await fetch(API_BASE_URL + '/api/config/test-gemini', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -619,7 +621,7 @@ function App() {
     }
 
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/backgrounds/${bgId}/toggle`, {
+      const response = await fetch(`${API_BASE_URL}/api/backgrounds/${bgId}/toggle`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
@@ -650,7 +652,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/backgrounds', {
+      const response = await fetch(API_BASE_URL + '/api/backgrounds', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -687,7 +689,7 @@ function App() {
     if (!window.confirm(`¿Estás seguro que deseas dar de baja y borrar el fondo "${name}" permanentemente?`)) return;
 
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/backgrounds/${bgId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/backgrounds/${bgId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
@@ -729,7 +731,7 @@ function App() {
     if (!window.confirm('🚨 ¡ADVERTENCIA CRÍTICA! Esta acción restablecerá todos los jugadores, DTs y árbitros a sus valores por defecto de fábrica. ¿Deseas continuar?')) return;
     
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/federation/reset', {
+      const response = await fetch(API_BASE_URL + '/api/federation/reset', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
