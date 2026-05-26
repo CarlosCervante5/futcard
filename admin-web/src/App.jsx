@@ -108,128 +108,138 @@ function App() {
   const isSuperAdmin = activeAdmin?.role === 'Super Admin';
   const isEditor = activeAdmin?.role === 'Editor Liga';
   const isAuditor = activeAdmin?.role === 'Auditor Técnico';
+  const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('futcard_admin_jwt') || '');
 
-  // Load shared data from localStorage on mount
+  // Load shared data from API backend on mount and auth state change
   useEffect(() => {
     loadData();
-    // Add window listener to sync edits across windows
-    window.addEventListener('storage', loadData);
-    return () => window.removeEventListener('storage', loadData);
-  }, []);
+  }, [authToken]);
 
-  const loadData = () => {
-    // 1. Load federated users databases
-    const players = localStorage.getItem(MOCK_DB_KEYS.players);
-    const dts = localStorage.getItem(MOCK_DB_KEYS.dts);
-    const referees = localStorage.getItem(MOCK_DB_KEYS.referees);
-    const leagues = localStorage.getItem(MOCK_DB_KEYS.leagues);
+  const loadData = async (token = authToken) => {
+    try {
+      // 1. Fetch federated data
+      const resFed = await fetch('http://127.0.0.1:5000/api/federation');
+      if (resFed.ok) {
+        const dataFed = await resFed.json();
+        setDb(dataFed);
+        // Maintain local storage cache for client components on separate ports
+        localStorage.setItem(MOCK_DB_KEYS.players, JSON.stringify(dataFed.players));
+        localStorage.setItem(MOCK_DB_KEYS.dts, JSON.stringify(dataFed.dts));
+        localStorage.setItem(MOCK_DB_KEYS.referees, JSON.stringify(dataFed.referees));
+        localStorage.setItem(MOCK_DB_KEYS.leagues, JSON.stringify(dataFed.leagues));
+      }
 
-    setDb({
-      players: players ? JSON.parse(players) : [],
-      dts: dts ? JSON.parse(dts) : [],
-      referees: referees ? JSON.parse(referees) : [],
-      leagues: leagues ? JSON.parse(leagues) : []
-    });
+      // 2. Fetch backgrounds
+      const resBgs = await fetch('http://127.0.0.1:5000/api/backgrounds');
+      if (resBgs.ok) {
+        const dataBgs = await resBgs.json();
+        setBackgroundsList(dataBgs);
+        localStorage.setItem(MOCK_DB_KEYS.backgrounds, JSON.stringify(dataBgs));
+      }
 
-    // 2. Load and seed administrators
-    let admins = localStorage.getItem(MOCK_DB_KEYS.admins);
-    if (!admins) {
-      const defaultAdmins = [
-        { id: 'admin-1', name: 'Directiva FMF Super', email: 'admin@pitchpulse.com', password: 'admin2026', role: 'Super Admin' },
-        { id: 'admin-2', name: 'Santiago Editor FMF', email: 'editor@pitchpulse.com', password: 'editor2026', role: 'Editor Liga' },
-        { id: 'admin-3', name: 'Sofía Auditora Liga', email: 'auditor@pitchpulse.com', password: 'auditor2026', role: 'Auditor Técnico' }
-      ];
-      localStorage.setItem(MOCK_DB_KEYS.admins, JSON.stringify(defaultAdmins));
-      setAdminsList(defaultAdmins);
-    } else {
-      setAdminsList(JSON.parse(admins));
-    }
+      // 3. Fetch audit logs (Requires Auth)
+      if (token) {
+        const resLogs = await fetch('http://127.0.0.1:5000/api/audit-logs', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (resLogs.ok) {
+          const dataLogs = await resLogs.json();
+          setAuditLogs(dataLogs);
+        }
 
-    // 3. Load and seed audit logs
-    let logs = localStorage.getItem(MOCK_DB_KEYS.auditLogs);
-    if (!logs) {
-      const defaultLogs = [
-        { id: 'log-1', time: '2026-05-26 11:20:45', email: 'admin@pitchpulse.com', details: 'Inicialización de la base de datos oficial', ip: '127.0.0.1' },
-        { id: 'log-2', time: '2026-05-26 12:45:10', email: 'editor@pitchpulse.com', details: 'Revisión y avales técnicos cargados', ip: '192.168.1.102' }
-      ];
-      localStorage.setItem(MOCK_DB_KEYS.auditLogs, JSON.stringify(defaultLogs));
-      setAuditLogs(defaultLogs);
-    } else {
-      setAuditLogs(JSON.parse(logs));
-    }
-
-    // 4. Seeding dynamic backgrounds list
-    let bgs = localStorage.getItem(MOCK_DB_KEYS.backgrounds);
-    if (!bgs) {
-      const defaultBackgrounds = [
-        { id: 'neon_pitch', name: '🏟️ Fondo Pitch Neón', description: 'Líneas de juego color verde neón futurista', image: '/backgrounds/neon_pitch.png', isPreset: true, enabled: true },
-        { id: 'golden_shield', name: '🥇 Fondo Escudo Dorado', description: 'Textura dorada metálica de lujo', image: '/backgrounds/golden_shield.png', isPreset: true, enabled: true },
-        { id: 'cyber_grid', name: '👾 Fondo Rejilla Cyber', description: 'Matriz de rejilla de datos neón rosa/violeta', image: '/backgrounds/cyber_grid.png', isPreset: true, enabled: true },
-        { id: 'legend_marble', name: '🏛️ Fondo Mármol Leyenda', description: 'Mármol blanco elegante con vetas de oro', image: '/backgrounds/legend_marble.png', isPreset: true, enabled: true }
-      ];
-      localStorage.setItem(MOCK_DB_KEYS.backgrounds, JSON.stringify(defaultBackgrounds));
-      setBackgroundsList(defaultBackgrounds);
-    } else {
-      setBackgroundsList(JSON.parse(bgs));
+        // Fetch admins (Super Admin only)
+        const activeUser = JSON.parse(sessionStorage.getItem('futcard_active_admin') || '{}');
+        if (activeUser.role === 'Super Admin') {
+          const resAdmins = await fetch('http://127.0.0.1:5000/api/admins', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (resAdmins.ok) {
+            const dataAdmins = await resAdmins.json();
+            setAdminsList(dataAdmins);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching API backend data:', err);
     }
   };
 
-  const persistData = (updatedDb) => {
+  const persistData = async (updatedDb) => {
+    // Immediate React update for ultra-premium responsive feel
+    setDb(updatedDb);
     localStorage.setItem(MOCK_DB_KEYS.players, JSON.stringify(updatedDb.players));
     localStorage.setItem(MOCK_DB_KEYS.dts, JSON.stringify(updatedDb.dts));
     localStorage.setItem(MOCK_DB_KEYS.referees, JSON.stringify(updatedDb.referees));
-    setDb(updatedDb);
-
-    // Trigger local storage event manually for other tabs / windows
+    localStorage.setItem(MOCK_DB_KEYS.leagues, JSON.stringify(updatedDb.leagues));
     window.dispatchEvent(new Event('storage'));
+
+    // Sync to backend via secure API synchronization endpoint
+    if (authToken) {
+      try {
+        await fetch('http://127.0.0.1:5000/api/federation/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify(updatedDb)
+        });
+        loadData(authToken);
+      } catch (err) {
+        console.error('Error syncing changes with API backend:', err);
+      }
+    }
   };
 
-  // Helper to add audit logs
-  const logAuditAction = (email, details) => {
-    const now = new Date();
-    const formattedTime = now.toISOString().replace('T', ' ').substring(0, 19);
-    
-    // Simulating user IP
-    const randomIP = `192.168.1.${Math.floor(Math.random() * 254) + 1}`;
-    const newLog = {
-      id: `log-${Date.now()}`,
-      time: formattedTime,
-      email,
-      details,
-      ip: randomIP
-    };
-
-    const currentLogs = JSON.parse(localStorage.getItem(MOCK_DB_KEYS.auditLogs) || '[]');
-    const nextLogs = [newLog, ...currentLogs].slice(0, 50); // Keep last 50 entries
-    localStorage.setItem(MOCK_DB_KEYS.auditLogs, JSON.stringify(nextLogs));
-    setAuditLogs(nextLogs);
+  // Helper to add audit logs dynamically
+  const logAuditAction = async (email, details) => {
+    if (authToken) {
+      try {
+        await fetch('http://127.0.0.1:5000/api/audit-logs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`
+          },
+          body: JSON.stringify({ action: details })
+        });
+        loadData(authToken);
+      } catch (err) {
+        console.error('Error reporting audit logs to backend:', err);
+      }
+    }
   };
 
-  // Auth: Handle Sign In
-  const handleLogin = (e) => {
+  // Auth: Handle Sign In via Express Central JWT login
+  const handleLogin = async (e) => {
     e.preventDefault();
     if (!loginEmail.trim() || !loginPassword.trim()) return;
 
-    // Search administrator database
-    const matchedAdmin = adminsList.find(
-      a => a.email.toLowerCase() === loginEmail.toLowerCase() && a.password === loginPassword
-    );
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+      });
 
-    if (matchedAdmin) {
-      // Login success
-      sessionStorage.setItem('futcard_active_admin', JSON.stringify(matchedAdmin));
-      setActiveAdmin(matchedAdmin);
-      logAuditAction(matchedAdmin.email, 'Inicio de sesión exitoso');
-      showToast(`🔑 Bienvenido de nuevo, ${matchedAdmin.name}`);
-      
-      // Clear forms
-      setLoginEmail('');
-      setLoginPassword('');
-      setLoginError('');
-    } else {
-      // Login failed with premium visual shake
+      const data = await response.json();
+      if (response.ok) {
+        sessionStorage.setItem('futcard_active_admin', JSON.stringify(data.user));
+        sessionStorage.setItem('futcard_admin_jwt', data.token);
+        setAuthToken(data.token);
+        setActiveAdmin(data.user);
+        showToast(`🔑 Bienvenido de nuevo, ${data.user.name}`);
+        
+        // Clear forms
+        setLoginEmail('');
+        setLoginPassword('');
+        setLoginError('');
+      } else {
+        throw new Error(data.error || 'Credenciales incorrectas.');
+      }
+    } catch (err) {
       setLoginShake(true);
-      setLoginError('Credenciales incorrectas. Verifica tu correo y contraseña.');
+      setLoginError(err.message || 'Error al conectar con el servidor.');
       setTimeout(() => {
         setLoginShake(false);
       }, 500);
@@ -239,8 +249,9 @@ function App() {
   // Auth: Handle Sign Out
   const handleLogout = () => {
     if (activeAdmin) {
-      logAuditAction(activeAdmin.email, 'Cierre de sesión voluntario');
       sessionStorage.removeItem('futcard_active_admin');
+      sessionStorage.removeItem('futcard_admin_jwt');
+      setAuthToken('');
       setActiveAdmin(null);
       setActiveTab('federados');
       showToast('🔒 Sesión cerrada con éxito');
@@ -459,7 +470,7 @@ function App() {
   };
 
   // Admin CRUD: Create / Update Administrator Account
-  const handleCreateOrUpdateAdmin = (e) => {
+  const handleCreateOrUpdateAdmin = async (e) => {
     e.preventDefault();
     if (!isSuperAdmin) {
       showToast('⚠️ Error: Solo un Super Admin puede gestionar cuentas administrativas.');
@@ -467,52 +478,39 @@ function App() {
     }
     if (!adminForm.name.trim() || !adminForm.email.trim() || !adminForm.password.trim()) return;
 
-    let nextAdmins = [...adminsList];
-
     if (editingAdminId) {
-      // Prevent editing the default super admin email/role to avoid locked state
-      if (editingAdminId === 'admin-1' && (adminForm.role !== 'Super Admin' || adminForm.email !== 'admin@pitchpulse.com')) {
-        showToast('⚠️ Error de Seguridad: No se permite cambiar el rol o email del Super Admin primario.');
-        return;
-      }
-
-      nextAdmins = adminsList.map(a => a.id === editingAdminId ? {
-        ...a,
-        name: adminForm.name,
-        email: adminForm.email,
-        password: adminForm.password,
-        role: adminForm.role
-      } : a);
-      logAuditAction(activeAdmin.email, `Modificó administrador: ${adminForm.email} (${adminForm.role})`);
-      showToast(`📝 Administrador "${adminForm.name}" modificado`);
+      showToast('⚠️ Edición directa desactivada en modo centralizado. Da de baja y registra de nuevo.');
       setEditingAdminId(null);
-    } else {
-      // Check for email duplication
-      if (adminsList.some(a => a.email.toLowerCase() === adminForm.email.toLowerCase())) {
-        showToast('⚠️ Error: Este correo de administrador ya se encuentra registrado.');
-        return;
-      }
-
-      const newAdmin = {
-        id: `admin-${Date.now()}`,
-        name: adminForm.name,
-        email: adminForm.email,
-        password: adminForm.password,
-        role: adminForm.role
-      };
-      nextAdmins = [...adminsList, newAdmin];
-      logAuditAction(activeAdmin.email, `Creó nuevo administrador: ${adminForm.email} (${adminForm.role})`);
-      showToast(`➕ Nuevo administrador "${adminForm.name}" registrado`);
+      setAdminForm({ name: '', email: '', password: '', role: 'Editor Liga' });
+      return;
     }
 
-    localStorage.setItem(MOCK_DB_KEYS.admins, JSON.stringify(nextAdmins));
-    setAdminsList(nextAdmins);
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/admins', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(adminForm)
+      });
 
-    setAdminForm({ name: '', email: '', password: '', role: 'Editor Liga' });
+      const data = await response.json();
+      if (response.ok) {
+        showToast(`➕ Nuevo administrador "${adminForm.name}" registrado`);
+        setAdminForm({ name: '', email: '', password: '', role: 'Editor Liga' });
+        loadData(authToken);
+      } else {
+        showToast(`⚠️ Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ Error al conectar con el servidor.');
+    }
   };
 
   // Admin CRUD: Delete Administrator
-  const handleDeleteAdminClick = (id, name, email) => {
+  const handleDeleteAdminClick = async (id, name, email) => {
     if (!isSuperAdmin) {
       showToast('⚠️ Permiso denegado: Solo un Super Admin puede dar de baja administradores.');
       return;
@@ -528,28 +526,55 @@ function App() {
 
     if (!window.confirm(`¿Estás seguro que deseas dar de baja a la cuenta de admin "${name}"?`)) return;
 
-    const nextAdmins = adminsList.filter(a => a.id !== id);
-    localStorage.setItem(MOCK_DB_KEYS.admins, JSON.stringify(nextAdmins));
-    setAdminsList(nextAdmins);
-    
-    logAuditAction(activeAdmin.email, `Eliminó administrador permanente: ${email}`);
-    showToast(`🗑️ Cuenta de administrador "${name}" eliminada`);
-    if (editingAdminId === id) setEditingAdminId(null);
-  };
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/admins/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
 
+      const data = await response.json();
+      if (response.ok) {
+        showToast(`🗑️ Cuenta de administrador "${name}" eliminada`);
+        loadData(authToken);
+      } else {
+        showToast(`⚠️ Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ Error al conectar con el servidor.');
+    }
+  };
+    
   // System Configurations CRUD: Save Gemini API Key
-  const handleSaveGeminiKey = (e) => {
+  const handleSaveGeminiKey = async (e) => {
     e.preventDefault();
     if (isAuditor) {
       showToast('⚠️ Error: Tu nivel de Auditor Técnico no tiene permisos para alterar llaves de API.');
       return;
     }
-    localStorage.setItem(MOCK_DB_KEYS.geminiKey, geminiKey);
-    logAuditAction(activeAdmin.email, `Actualizó la clave de API de Google Gemini`);
-    showToast('🔑 API Key de Google Gemini guardada con éxito');
-    
-    // Trigger local storage event manually for client sync
-    window.dispatchEvent(new Event('storage'));
+
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/config/gemini-key', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ key: geminiKey })
+      });
+
+      if (response.ok) {
+        showToast('🔑 API Key de Google Gemini guardada con éxito');
+        localStorage.setItem(MOCK_DB_KEYS.geminiKey, geminiKey);
+        window.dispatchEvent(new Event('storage'));
+        loadData(authToken);
+      } else {
+        showToast('⚠️ Error al guardar la clave API Key.');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ Error al conectar con el servidor.');
+    }
   };
 
   // System Configurations: Diagnosticate Gemini prompt
@@ -562,26 +587,22 @@ function App() {
     setDiagnosticResult(null);
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+      const response = await fetch('http://127.0.0.1:5000/api/config/test-gemini', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
         },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `Analiza este prompt deportivo: '${diagnosticPrompt}'. Devuelve únicamente un objeto JSON plano sin backticks que asigne colores ideales para el tema: {"primaryColor": "#hex", "secondaryColor": "#hex", "accentColor": "#hex", "designName": "2 palabras", "feedbackMsg": "1 linea"}.`
-            }]
-          }]
-        })
+        body: JSON.stringify({ prompt: diagnosticPrompt })
       });
 
       const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanText);
-      setDiagnosticResult(parsed);
-      logAuditAction(activeAdmin.email, `Prueba exitosa del Sandbox de Gemini con prompt: "${diagnosticPrompt}"`);
+      if (response.ok) {
+        setDiagnosticResult(data);
+        showToast('🚀 Sandbox diagnosticó el prompt con éxito');
+      } else {
+        setDiagnosticResult({ error: data.error || 'Error del Sandbox.' });
+      }
     } catch (e) {
       console.error(e);
       setDiagnosticResult({ error: 'Fallo al parsear o conectar. Verifica la API Key o la estructura.' });
@@ -591,37 +612,33 @@ function App() {
   };
 
   // System Configurations CRUD: Toggle Enabled Background Image
-  const handleToggleBackground = (bgId) => {
+  const handleToggleBackground = async (bgId) => {
     if (isAuditor) {
       showToast('⚠️ Permiso denegado: Los auditores no pueden alterar los recursos visuales del sistema.');
       return;
     }
-    
-    const nextBackgrounds = backgroundsList.map(bg => {
-      if (bg.id === bgId) {
-        // Keep at least one enabled
-        const enabledCount = backgroundsList.filter(b => b.enabled).length;
-        if (bg.enabled && enabledCount <= 1) {
-          showToast('⚠️ Error: Debe permanecer al menos un fondo activo habilitado en la federación.');
-          return bg;
-        }
-        const updatedBg = { ...bg, enabled: !bg.enabled };
-        logAuditAction(activeAdmin.email, `${bg.enabled ? 'Deshabilitó' : 'Habilitó'} fondo de tarjeta: ${bg.name}`);
-        showToast(`🎨 Fondo "${bg.name}" ${bg.enabled ? 'desactivado' : 'activado'} en vivo`);
-        return updatedBg;
+
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/backgrounds/${bgId}/toggle`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        showToast(`🎨 Fondo "${data.name}" ${data.enabled ? 'activado' : 'desactivado'} en vivo`);
+        loadData(authToken);
+      } else {
+        showToast(`⚠️ Error: ${data.error}`);
       }
-      return bg;
-    });
-
-    localStorage.setItem(MOCK_DB_KEYS.backgrounds, JSON.stringify(nextBackgrounds));
-    setBackgroundsList(nextBackgrounds);
-
-    // Sync client storage event
-    window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ Error al conectar con el servidor.');
+    }
   };
 
   // System Configurations CRUD: Upload Custom Background Image (base64)
-  const handleUploadCustomBackground = (e) => {
+  const handleUploadCustomBackground = async (e) => {
     e.preventDefault();
     if (isAuditor) {
       showToast('⚠️ Error: Los auditores no tienen permitido subir archivos multimedia.');
@@ -632,56 +649,60 @@ function App() {
       return;
     }
 
-    const newBg = {
-      id: `bg-custom-${Date.now()}`,
-      name: `🎨 ${customBgForm.name}`,
-      description: customBgForm.description || 'Fondo cargado por el administrador',
-      image: customBgForm.image,
-      isPreset: false,
-      enabled: true
-    };
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/backgrounds', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: customBgForm.name,
+          description: customBgForm.description,
+          image: customBgForm.image
+        })
+      });
 
-    const nextBackgrounds = [...backgroundsList, newBg];
-    localStorage.setItem(MOCK_DB_KEYS.backgrounds, JSON.stringify(nextBackgrounds));
-    setBackgroundsList(nextBackgrounds);
-
-    logAuditAction(activeAdmin.email, `Subió nuevo fondo de tarjeta personalizado: ${customBgForm.name}`);
-    showToast(`➕ Fondo "${customBgForm.name}" subido e integrado con éxito`);
-
-    // Reset Form
-    setCustomBgForm({ name: '', description: '', image: '' });
-    if (fileInputRef.current) fileInputRef.current.value = '';
-
-    // Sync client storage event
-    window.dispatchEvent(new Event('storage'));
+      const data = await response.json();
+      if (response.ok) {
+        showToast(`➕ Fondo "${customBgForm.name}" subido e integrado con éxito`);
+        setCustomBgForm({ name: '', description: '', image: '' });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        loadData(authToken);
+      } else {
+        showToast(`⚠️ Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ Error al conectar con el servidor.');
+    }
   };
 
   // System Configurations CRUD: Delete Custom Background Image
-  const handleDeleteBackground = (bgId, name) => {
+  const handleDeleteBackground = async (bgId, name) => {
     if (isAuditor) {
       showToast('⚠️ Permiso denegado.');
       return;
     }
     if (!window.confirm(`¿Estás seguro que deseas dar de baja y borrar el fondo "${name}" permanentemente?`)) return;
 
-    // Check if it's currently active and if we are breaking min counts
-    const nextBackgrounds = backgroundsList.filter(bg => bg.id !== bgId);
-    
-    // Safety check: make sure we have at least one enabled
-    const enabledCount = nextBackgrounds.filter(b => b.enabled).length;
-    if (enabledCount < 1) {
-      showToast('⚠️ Error: No puedes eliminar este fondo ya que rompería el mínimo de fondos activos.');
-      return;
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/backgrounds/${bgId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        showToast(`🗑️ Fondo "${name}" eliminado permanentemente`);
+        loadData(authToken);
+      } else {
+        showToast(`⚠️ Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ Error al conectar con el servidor.');
     }
-
-    localStorage.setItem(MOCK_DB_KEYS.backgrounds, JSON.stringify(nextBackgrounds));
-    setBackgroundsList(nextBackgrounds);
-
-    logAuditAction(activeAdmin.email, `Eliminó fondo de tarjeta de forma permanente: ${name}`);
-    showToast(`🗑️ Fondo "${name}" eliminado permanentemente`);
-
-    // Sync client storage event
-    window.dispatchEvent(new Event('storage'));
   };
 
   const handleCustomImageFile = (e) => {
@@ -700,25 +721,38 @@ function App() {
   };
 
   // Reset database values to factory defaults
-  const handleFactoryResetData = () => {
+  const handleFactoryResetData = async () => {
     if (!isSuperAdmin) {
       showToast('⚠️ Error de Seguridad: Solo un Super Admin principal puede restablecer la base de datos.');
       return;
     }
     if (!window.confirm('🚨 ¡ADVERTENCIA CRÍTICA! Esta acción restablecerá todos los jugadores, DTs y árbitros a sus valores por defecto de fábrica. ¿Deseas continuar?')) return;
     
-    localStorage.removeItem('futcard_players');
-    localStorage.removeItem('futcard_dts');
-    localStorage.removeItem('futcard_referees');
-    localStorage.removeItem('futcard_leagues');
-    localStorage.removeItem('futcard_all_backgrounds');
-    
-    logAuditAction(activeAdmin.email, 'Restableció la base de datos federativa a los valores de fábrica');
-    showToast('🔄 Base de datos federativa restablecida con éxito. Recargando datos...');
-    
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/federation/reset', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        showToast('🔄 Base de datos federativa restablecida con éxito. Recargando datos...');
+        localStorage.removeItem('futcard_players');
+        localStorage.removeItem('futcard_dts');
+        localStorage.removeItem('futcard_referees');
+        localStorage.removeItem('futcard_leagues');
+        localStorage.removeItem('futcard_all_backgrounds');
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        showToast(`⚠️ Error: ${data.error}`);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('⚠️ Error al conectar con el servidor.');
+    }
   };
 
   // Helper Toast Notification

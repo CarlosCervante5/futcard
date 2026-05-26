@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Secrets & Keys
+.env
+jwt_secret.txt
+
+# Databases
+db.json

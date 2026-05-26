@@ -84,89 +84,58 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
     }
   };
 
-  // Real-time Gemini API Integration using system-wide API Key configured in Web Admin!
+  // Real-time Gemini API Integration via Server-Side BFF Proxy (BFF Key Protection)
   const simulateAIGeneration = async () => {
     if (!prompt.trim()) return;
     setIsGeneratingAI(true);
     setSuccessMsg('');
 
-    const systemApiKey = localStorage.getItem('futcard_gemini_api_key') || '';
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/cards/generate-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ prompt: prompt })
+      });
 
-    if (systemApiKey.trim()) {
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${systemApiKey}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `Eres el motor creativo de la app de cartas deportivas FutCard Pro. El usuario ingresó este prompt creativo: '${prompt}'. Analiza este prompt y devuelve ÚNICAMENTE un objeto JSON sin formato markdown (NO uses bloques de código con backticks ni la palabra json) con la siguiente estructura exacta: {"primaryColor": "#código_hexadecimal_del_color_primario_que_combine_con_gris", "secondaryColor": "#código_hexadecimal_de_color_de_fondo", "accentColor": "#código_hexadecimal_de_destello_neon", "angle": 135, "designName": "Nombre elegante del diseño en 2 palabras cortas", "feedbackMsg": "Mensaje poético corto de 1 línea"}. Asegúrate de que los colores hagan juego perfecto, sean sumamente premium, de alta fidelidad y combinen con una base oscura.`
-              }]
-            }]
-          })
-        });
-
-        const data = await response.json();
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        
-        // Clean markdown backticks if returned
-        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanText);
-
+      const data = await response.json();
+      if (response.ok) {
         onUpdatePlayer({
           ...player,
           cardTheme: 'ai',
           aiPrompt: prompt,
           aiColors: {
-            primaryColor: parsed.primaryColor || '#22d3ee',
-            secondaryColor: parsed.secondaryColor || '#0c0f0f',
-            accentColor: parsed.accentColor || '#22d3ee',
-            angle: parsed.angle || 135,
-            designName: parsed.designName?.toUpperCase() || 'DISEÑO IA'
+            primaryColor: data.primaryColor || '#22d3ee',
+            secondaryColor: data.secondaryColor || '#0c0f0f',
+            accentColor: data.accentColor || '#22d3ee',
+            angle: data.angle || 135,
+            designName: data.designName?.toUpperCase() || 'DISEÑO IA'
           }
         });
-        setSuccessMsg(`🎨 ¡Gemini AI activó el diseño: "${parsed.designName}"! (${parsed.feedbackMsg || ''})`);
-      } catch (err) {
-        console.error('Error con Gemini:', err);
-        // Fallback to stylized local generator
-        onUpdatePlayer({
-          ...player,
-          cardTheme: 'ai',
-          aiPrompt: prompt,
-          aiColors: {
-            primaryColor: '#c3f400',
-            secondaryColor: '#1e2020',
-            accentColor: '#c3f400',
-            angle: 135,
-            designName: 'PITCH GLOW'
-          }
-        });
-        setSuccessMsg('⚠️ Error conectando con Gemini API. Se cargó un estilo neón de respaldo.');
-      } finally {
-        setIsGeneratingAI(false);
-        setTimeout(() => setSuccessMsg(''), 5500);
+        setSuccessMsg(`🎨 ¡Diseño de IA cargado: "${data.designName}"! (${data.feedbackMsg || ''})`);
+      } else {
+        throw new Error(data.error || 'Error al generar.');
       }
-    } else {
-      // Mock Simulator Fallback if admin has not configured key
-      setTimeout(() => {
-        setIsGeneratingAI(false);
-        const randomDesigns = [
-          { primaryColor: '#22d3ee', secondaryColor: '#0c0f0f', accentColor: '#22d3ee', angle: 135, designName: 'VORTEX CIAN' },
-          { primaryColor: '#ec4899', secondaryColor: '#1e1b4b', accentColor: '#ec4899', angle: 45, designName: 'PLASMA NEÓN' },
-          { primaryColor: '#facc15', secondaryColor: '#1c1917', accentColor: '#fbbf24', angle: 90, designName: 'NÚCLEO SOLAR' }
-        ];
-        const selectedDesign = randomDesigns[Math.floor(Math.random() * randomDesigns.length)];
-        onUpdatePlayer({
-          ...player,
-          cardTheme: 'ai',
-          aiPrompt: prompt,
-          aiColors: selectedDesign
-        });
-        setSuccessMsg('🎨 ¡Fondo simulado! (Pídele a un administrador habilitar la Gemini API Key en el panel)');
-        setTimeout(() => setSuccessMsg(''), 4500);
-      }, 1500);
+    } catch (err) {
+      console.error('Error connecting with Gemini API:', err);
+      // Fallback stylized system (Fail Safe)
+      onUpdatePlayer({
+        ...player,
+        cardTheme: 'ai',
+        aiPrompt: prompt,
+        aiColors: {
+          primaryColor: '#c3f400',
+          secondaryColor: '#1e2020',
+          accentColor: '#c3f400',
+          angle: 135,
+          designName: 'PITCH GLOW'
+        }
+      });
+      setSuccessMsg('⚠️ Fallo de conexión. Se cargó un tema visual de respaldo.');
+    } finally {
+      setIsGeneratingAI(false);
+      setTimeout(() => setSuccessMsg(''), 5500);
     }
   };
 
