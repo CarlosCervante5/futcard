@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Elite Scout | Player Card</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Anton&amp;family=Hanken+Grotesk:wght@400;500;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .player-card-glow {
+            box-shadow: 0 0 40px -10px rgba(195, 244, 0, 0.3);
+        }
+        .diagonal-bg {
+            background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(195, 244, 0, 0.02) 10px, rgba(195, 244, 0, 0.02) 20px);
+        }
+        .clip-path-slant {
+            clip-path: polygon(0 0, 100% 0, 100% 90%, 0% 100%);
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#690005",
+                        "surface-container-lowest": "#0c0f0f",
+                        "tertiary-container": "#1c1c1c",
+                        "background": "#121414",
+                        "on-tertiary": "#313030",
+                        "surface-container": "#1e2020",
+                        "outline-variant": "#434844",
+                        "surface-dim": "#121414",
+                        "outline": "#8d928d",
+                        "surface-container-highest": "#333535",
+                        "on-secondary": "#283500",
+                        "primary-fixed": "#d4e7da",
+                        "on-secondary-fixed-variant": "#3c4d00",
+                        "tertiary": "#c8c6c5",
+                        "inverse-primary": "#516258",
+                        "error": "#ffb4ab",
+                        "on-secondary-container": "#556d00",
+                        "secondary-container": "#c3f400",
+                        "primary": "#b8cbbe",
+                        "inverse-on-surface": "#2f3131",
+                        "tertiary-fixed-dim": "#c8c6c5",
+                        "primary-container": "#0f1f17",
+                        "tertiary-fixed": "#e5e2e1",
+                        "on-tertiary-container": "#858484",
+                        "on-tertiary-fixed-variant": "#474746",
+                        "on-primary-container": "#76887d",
+                        "error-container": "#93000a",
+                        "on-primary": "#24342b",
+                        "surface-bright": "#38393a",
+                        "secondary-fixed": "#c3f400",
+                        "surface-container-high": "#282a2b",
+                        "on-primary-fixed-variant": "#3a4b41",
+                        "surface-variant": "#333535",
+                        "surface-container-low": "#1a1c1c",
+                        "secondary-fixed-dim": "#abd600",
+                        "on-surface": "#e2e2e2",
+                        "surface-tint": "#b8cbbe",
+                        "on-error-container": "#ffdad6",
+                        "primary-fixed-dim": "#b8cbbe",
+                        "surface": "#121414",
+                        "inverse-surface": "#e2e2e2",
+                        "on-tertiary-fixed": "#1c1b1b",
+                        "secondary": "#ffffff",
+                        "on-surface-variant": "#c3c8c2",
+                        "on-primary-fixed": "#0f1f17",
+                        "on-background": "#e2e2e2",
+                        "on-secondary-fixed": "#161e00"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "2xl": "64px",
+                        "gutter": "20px",
+                        "unit": "4px",
+                        "xl": "40px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "container-max": "1280px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["JetBrains Mono"],
+                        "headline-lg-mobile": ["Anton"],
+                        "body-lg": ["Hanken Grotesk"],
+                        "headline-lg": ["Anton"],
+                        "display-lg": ["Anton"],
+                        "body-md": ["Hanken Grotesk"],
+                        "stat-value": ["Anton"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.2", "fontWeight": "400"}],
+                        "display-lg": ["64px", {"lineHeight": "1.1", "letterSpacing": "0.02em", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                        "stat-value": ["20px", {"lineHeight": "1", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-surface font-body-md antialiased overflow-x-hidden">
+<!-- Header (Shared Component: TopAppBar logic but minimalist for Share view) -->
+<header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl border-b border-white/10 flex justify-between items-center px-[20px] h-16">
+<h1 class="font-display-lg text-headline-lg-mobile text-secondary italic tracking-widest uppercase">ELITE SCOUT</h1>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-secondary transition-colors">
+<span class="material-symbols-outlined">share</span>
+</button>
+</div>
+</header>
+<main class="pt-24 pb-32 px-gutter min-h-screen flex flex-col items-center justify-center relative">
+<!-- Background Atmospheric Glows -->
+<div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-secondary-fixed/10 blur-[100px] -z-10 rounded-full"></div>
+<div class="absolute bottom-1/4 right-0 w-[200px] h-[200px] bg-secondary-fixed/5 blur-[80px] -z-10 rounded-full"></div>
+<!-- Hero: The FIFA-style Player Card -->
+<div class="relative w-full max-w-[340px] aspect-[2/3] group transition-transform duration-500 hover:scale-[1.02]">
+<!-- Card Body -->
+<div class="absolute inset-0 glass-card player-card-glow overflow-hidden flex flex-col items-center border-2 border-secondary-fixed/20">
+<!-- Diagonal Pattern Overlay -->
+<div class="absolute inset-0 diagonal-bg pointer-events-none opacity-20"></div>
+<!-- Card Header Section -->
+<div class="relative w-full h-[60%] overflow-hidden">
+<!-- Rating and Pos -->
+<div class="absolute top-6 left-6 z-20 flex flex-col items-center">
+<span class="font-display-lg text-[64px] leading-none text-secondary-fixed">92</span>
+<span class="font-label-sm text-secondary-fixed tracking-[0.2em] mt-1">ST</span>
+</div>
+<!-- Player Image (Cutout) -->
+<div class="absolute bottom-0 right-[-10%] w-[110%] h-[120%] z-10">
+<img alt="Professional Footballer Action Shot" class="w-full h-full object-cover object-center transform transition-transform duration-700 group-hover:scale-105" data-alt="A professional young football player captured in a dynamic action pose, looking intense and focused. The player is isolated against a clean, dark studio background with professional cinematic lighting that highlights the muscle definition and texture of the team jersey. The overall aesthetic is elite, high-performance sports photography with high contrast and sharp details, fitting for a premium scouting platform." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBshM0PFdDScF8HAnzm-HVSY9l-vkJJxPjnXkDo2uiDrX7skHwjWHv5TMSM_pmAVQssgAx_j0N9Xok_ljOOOAtwtE5AgXyMQqZ5xquxJKSdQaxiMGr4rQ0IaaJcBpqgG_xz-LmqXtCATi1bm_-6K0Ra3QHFyzA7cBpUGvMKr9GyOfekH4NGgOhh8IIbcKtQBpS8BaEIo5l9nd1wDeGHIXpeyUEs4gZhvj5iihljYB5adG77m9McI8TyN2plAXUUSdThbP89ByaGIhF"/>
+</div>
+<!-- Gradient Fade -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-transparent to-transparent z-10"></div>
+</div>
+<!-- Card Info Section -->
+<div class="relative w-full h-[40%] bg-surface-container-lowest/80 p-lg flex flex-col items-center justify-center border-t border-white/10">
+<div class="flex items-center gap-2 mb-1">
+<h2 class="font-headline-lg-mobile text-secondary uppercase tracking-tight">ALEX MORGAN</h2>
+<span class="material-symbols-outlined text-secondary-fixed text-[18px]" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<div class="flex items-center gap-sm mb-lg">
+<img alt="USA Flag" class="w-5 h-auto rounded-[2px] opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBshM0PFdDScF8HAnzm-HVSY9l-vkJJxPjnXkDo2uiDrX7skHwjWHv5TMSM_pmAVQssgAx_j0N9Xok_ljOOOAtwtE5AgXyMQqZ5xquxJKSdQaxiMGr4rQ0IaaJcBpqgG_xz-LmqXtCATi1bm_-6K0Ra3QHFyzA7cBpUGvMKr9GyOfekH4NGgOhh8IIbcKtQBpS8BaEIo5l9nd1wDeGHIXpeyUEs4gZhvj5iihljYB5adG77m9McI8TyN2plAXUUSdThbP89ByaGIhF"/>
+<span class="text-outline text-label-sm uppercase">Elite United FC</span>
+</div>
+<!-- Key Stats Grid -->
+<div class="grid grid-cols-3 gap-x-8 gap-y-2 text-center w-full">
+<div class="flex flex-col">
+<span class="font-stat-value text-secondary text-xl">94</span>
+<span class="font-label-sm text-outline-variant text-[10px]">PAC</span>
+</div>
+<div class="flex flex-col">
+<span class="font-stat-value text-secondary text-xl">88</span>
+<span class="font-label-sm text-outline-variant text-[10px]">SHO</span>
+</div>
+<div class="flex flex-col">
+<span class="font-stat-value text-secondary text-xl">85</span>
+<span class="font-label-sm text-outline-variant text-[10px]">PAS</span>
+</div>
+<div class="flex flex-col">
+<span class="font-stat-value text-secondary text-xl">91</span>
+<span class="font-label-sm text-outline-variant text-[10px]">DRI</span>
+</div>
+<div class="flex flex-col">
+<span class="font-stat-value text-secondary text-xl">42</span>
+<span class="font-label-sm text-outline-variant text-[10px]">DEF</span>
+</div>
+<div class="flex flex-col">
+<span class="font-stat-value text-secondary text-xl">78</span>
+<span class="font-label-sm text-outline-variant text-[10px]">PHY</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Floating League Logo -->
+<div class="absolute -top-4 -right-4 w-12 h-12 bg-surface border border-secondary-fixed/30 rounded-full flex items-center justify-center p-2 z-30 shadow-2xl">
+<img alt="League Logo" class="w-full h-auto" data-alt="A stylized professional league emblem featuring a minimalist crest design with sharp geometric lines and a shield shape. The logo is rendered in a high-contrast white and dark gray color scheme, looking prestigious and official. It is presented on a clean background to highlight its professional branding." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBshM0PFdDScF8HAnzm-HVSY9l-vkJJxPjnXkDo2uiDrX7skHwjWHv5TMSM_pmAVQssgAx_j0N9Xok_ljOOOAtwtE5AgXyMQqZ5xquxJKSdQaxiMGr4rQ0IaaJcBpqgG_xz-LmqXtCATi1bm_-6K0Ra3QHFyzA7cBpUGvMKr9GyOfekH4NGgOhh8IIbcKtQBpS8BaEIo5l9nd1wDeGHIXpeyUEs4gZhvj5iihljYB5adG77m9McI8TyN2plAXUUSdThbP89ByaGIhF"/>
+</div>
+</div>
+<!-- Call to Actions -->
+<div class="mt-xl w-full max-w-[340px] flex flex-col gap-md">
+<button class="w-full bg-secondary-fixed text-on-secondary-fixed font-headline-lg-mobile uppercase py-lg tracking-widest hover:brightness-110 active:scale-95 transition-all">
+                Endorse Player
+            </button>
+<button class="w-full border border-secondary-fixed/50 text-secondary-fixed font-headline-lg-mobile uppercase py-lg tracking-widest hover:bg-secondary-fixed/5 active:scale-95 transition-all flex items-center justify-center gap-2">
+                View Full Profile
+                <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+<!-- Share Info -->
+<div class="mt-lg text-center">
+<p class="text-outline text-label-sm uppercase tracking-tighter opacity-60">Verified Scout Prospect • 2024 Season</p>
+</div>
+</main>
+<!-- Bottom Navigation (Shared Component Contextual Check: Suppressed for focused share view as per instructions, but adding a "Home" button for navigation back) -->
+<div class="fixed bottom-lg left-1/2 -translate-x-1/2 z-50">
+<button class="bg-surface-container/80 backdrop-blur-md border border-white/5 px-6 py-3 rounded-full flex items-center gap-3 text-on-surface-variant hover:text-secondary transition-all" onclick="window.history.back()">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-sm uppercase tracking-widest">Back to Hub</span>
+</button>
+</div>
+<script>
+        // Micro-interaction for tilt effect on the player card
+        const card = document.querySelector('.group');
+        const cardInner = document.querySelector('.glass-card');
+
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            
+            const rotateX = (y - centerY) / 20;
+            const rotateY = (centerX - x) / 20;
+
+            cardInner.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        });
+
+        card.addEventListener('mouseleave', () => {
+            cardInner.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg)`;
+        });
+    </script>
+</body></html>

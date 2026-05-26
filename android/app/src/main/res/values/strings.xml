@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FutCard Pro</string>
+    <string name="title_activity_main">FutCard Pro</string>
+    <string name="package_name">com.sportstech.futcardpro</string>
+    <string name="custom_url_scheme">com.sportstech.futcardpro</string>
+</resources>
