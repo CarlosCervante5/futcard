@@ -387,7 +387,7 @@ function App() {
             id="tab-league"
           >
             <ShieldCheck />
-            Liga FMF
+            Ver Ligas
           </button>
         </nav>
       )}
