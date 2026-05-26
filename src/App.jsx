@@ -387,7 +387,7 @@ function App() {
             id="tab-generator"
           >
             <Sparkles />
-            Estudio
+            Mi Card
           </button>
           <button
             onClick={() => setActiveTab('my-profile')}

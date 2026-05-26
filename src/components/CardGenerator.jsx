@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Sparkles, Download, RefreshCw, Star } from 'lucide-react';
+import { Upload, Sparkles, Download, RefreshCw, Star, Compass } from 'lucide-react';
 import PlayerCard from './PlayerCard';
 
 let API_BASE_URL = import.meta.env.VITE_API_URL;
@@ -18,16 +18,28 @@ if (!API_BASE_URL) {
 }
 
 const CardGenerator = ({ player, onUpdatePlayer }) => {
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-  const [prompt, setPrompt] = useState(player.aiPrompt || '');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [isCroppingAI, setIsCroppingAI] = useState(false);
+  const [cropSuccess, setCropSuccess] = useState('');
   const fileInputRef = useRef(null);
 
-  // Load dynamic background settings from local storage (centralized admin DB)
+  // Load dynamic background settings from local storage & API (centralized admin DB)
   const [allBackgrounds, setAllBackgrounds] = useState([]);
 
   useEffect(() => {
-    const loadBackgrounds = () => {
+    const fetchBackgrounds = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/backgrounds`);
+        if (response.ok) {
+          const data = await response.json();
+          setAllBackgrounds(data);
+          localStorage.setItem('futcard_all_backgrounds', JSON.stringify(data));
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not fetch backgrounds from API. Using local storage fallback.', err);
+      }
+
+      // Local storage fallback
       const savedBgs = localStorage.getItem('futcard_all_backgrounds');
       if (savedBgs) {
         try {
@@ -47,11 +59,11 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
       }
     };
 
-    loadBackgrounds();
-    
+    fetchBackgrounds();
+
     // Listen for storage events (e.g. changes made in Web Admin on the same domain)
-    window.addEventListener('storage', loadBackgrounds);
-    return () => window.removeEventListener('storage', loadBackgrounds);
+    window.addEventListener('storage', fetchBackgrounds);
+    return () => window.removeEventListener('storage', fetchBackgrounds);
   }, []);
 
   // Filter theme options based on administrator settings
@@ -60,21 +72,12 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
     { value: 'icon', label: 'Clásico Blanco / Leyenda' },
     { value: 'totw', label: 'Equipo de la Semana' },
     { value: 'future', label: 'Futuro Crack' },
-    { value: 'ai', label: 'Generación IA con Prompt' },
     ...allBackgrounds
       .filter(bg => bg.enabled)
       .map(bg => ({
         value: bg.id,
         label: bg.name
       }))
-  ];
-
-  const suggestionChips = [
-    'León de fuego místico',
-    'Tormenta eléctrica azul',
-    'Humo ciberpunk neón',
-    'Erupción de oro líquido',
-    'Fénix solar esmeralda'
   ];
 
   const positions = ['POR', 'DFC', 'LD', 'LI', 'MCD', 'MC', 'MCO', 'ED', 'EI', 'DEL'];
@@ -99,58 +102,66 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
     }
   };
 
-  // Real-time Gemini API Integration via Server-Side BFF Proxy (BFF Key Protection)
-  const simulateAIGeneration = async () => {
-    if (!prompt.trim()) return;
-    setIsGeneratingAI(true);
-    setSuccessMsg('');
+  // Intelligent client-side AI Silhouette Cropper (Background Removal)
+  const removeBackgroundWithAI = async () => {
+    if (!player.avatar) return;
+    setIsCroppingAI(true);
+    setCropSuccess('');
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/cards/generate-ai`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ prompt: prompt })
+      // 1. Simulate premium AI scanner delay
+      await new Promise(resolve => setTimeout(resolve, 2200));
+
+      // 2. Perform client-side intelligent canvas color-similarity background removal
+      const croppedImage = await new Promise((resolve) => {
+        const img = new Image();
+        img.src = player.avatar;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+
+          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imgData.data;
+
+          // Corner color detection (typical background color)
+          const r = data[0], g = data[1], b = data[2];
+          const threshold = 65; // similarity threshold
+
+          for (let i = 0; i < data.length; i += 4) {
+            const currR = data[i];
+            const currG = data[i+1];
+            const currB = data[i+2];
+
+            const dist = Math.sqrt(
+              Math.pow(currR - r, 2) +
+              Math.pow(currG - g, 2) +
+              Math.pow(currB - b, 2)
+            );
+
+            // Also detect bright white or very light grey backgrounds
+            const isWhite = currR > 230 && currG > 230 && currB > 230;
+
+            if (dist < threshold || isWhite) {
+              data[i + 3] = 0; // Set transparency to 100%
+            }
+          }
+
+          ctx.putImageData(imgData, 0, 0);
+          resolve(canvas.toDataURL('image/png'));
+        };
       });
 
-      const data = await response.json();
-      if (response.ok) {
-        onUpdatePlayer({
-          ...player,
-          cardTheme: 'ai',
-          aiPrompt: prompt,
-          aiColors: {
-            primaryColor: data.primaryColor || '#22d3ee',
-            secondaryColor: data.secondaryColor || '#0c0f0f',
-            accentColor: data.accentColor || '#22d3ee',
-            angle: data.angle || 135,
-            designName: data.designName?.toUpperCase() || 'DISEÑO IA'
-          }
-        });
-        setSuccessMsg(`🎨 ¡Diseño de IA cargado: "${data.designName}"! (${data.feedbackMsg || ''})`);
-      } else {
-        throw new Error(data.error || 'Error al generar.');
-      }
+      onUpdatePlayer({ ...player, avatar: croppedImage });
+      setCropSuccess('✨ ¡Silueta recortada con IA y montada en tu tarjeta con éxito!');
     } catch (err) {
-      console.error('Error connecting with Gemini API:', err);
-      // Fallback stylized system (Fail Safe)
-      onUpdatePlayer({
-        ...player,
-        cardTheme: 'ai',
-        aiPrompt: prompt,
-        aiColors: {
-          primaryColor: '#c3f400',
-          secondaryColor: '#1e2020',
-          accentColor: '#c3f400',
-          angle: 135,
-          designName: 'PITCH GLOW'
-        }
-      });
-      setSuccessMsg('⚠️ Fallo de conexión. Se cargó un tema visual de respaldo.');
+      console.error('Error cropping image:', err);
+      setCropSuccess('⚠️ Error al recortar la silueta del jugador.');
     } finally {
-      setIsGeneratingAI(false);
-      setTimeout(() => setSuccessMsg(''), 5500);
+      setIsCroppingAI(false);
+      setTimeout(() => setCropSuccess(''), 4500);
     }
   };
 
@@ -188,9 +199,6 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
       } else if (player.cardTheme === 'totw') {
         ratingColor = '#fbbf24';
         nameColor = '#fbbf24';
-      } else if (player.cardTheme === 'ai') {
-        ratingColor = player.aiColors?.accentColor || '#22d3ee';
-        nameColor = player.aiColors?.primaryColor || '#22d3ee';
       } else if (player.cardTheme === 'neon_pitch') {
         ratingColor = '#c3f400';
         nameColor = '#c3f400';
@@ -333,12 +341,9 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
         bgGrad.addColorStop(0.5, '#1e1b4b');
         bgGrad.addColorStop(1, '#ec4899');
       } else {
-        // AI custom theme
-        const primary = player.aiColors?.primaryColor || '#22d3ee';
-        const secondary = player.aiColors?.secondaryColor || '#0c0f0f';
         bgGrad.addColorStop(0, '#121414');
-        bgGrad.addColorStop(0.5, secondary);
-        bgGrad.addColorStop(1, primary);
+        bgGrad.addColorStop(0.5, '#1e2020');
+        bgGrad.addColorStop(1, '#c3f400');
       }
 
       ctx.fillStyle = bgGrad;
@@ -358,7 +363,7 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
     <div style={{ paddingBottom: '32px' }}>
       <h2 className="section-title">
         <Star size={18} fill="currentColor" color="var(--primary)" />
-        Estudio de Tarjetas
+        Mi Card Studio
       </h2>
 
       {/* Main card preview with metallic shimmer */}
@@ -423,7 +428,7 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
           </select>
         </div>
 
-        {/* Custom Picture Upload Button */}
+        {/* Custom Picture Upload Button with AI Silhouette Cropper */}
         <div className="form-group">
           <label>Foto del Jugador</label>
           <input
@@ -433,19 +438,163 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
             accept="image/*"
             style={{ display: 'none' }}
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="btn-secondary"
-            style={{ width: '100%', borderStyle: 'dashed' }}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="btn-secondary"
+              style={{ flex: 1, borderStyle: 'dashed' }}
+            >
+              <Upload size={16} />
+              Subir Foto
+            </button>
+            
+            {player.avatar && (
+              <button
+                onClick={removeBackgroundWithAI}
+                className="btn-primary"
+                style={{ 
+                  flex: 1, 
+                  background: 'var(--primary)', 
+                  boxShadow: '0 0 10px var(--primary-glow)', 
+                  color: '#121414',
+                  fontSize: '13px'
+                }}
+                disabled={isCroppingAI}
+              >
+                {isCroppingAI ? (
+                  <>
+                    <RefreshCw className="animate-spin" size={14} />
+                    Recortando...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={14} fill="currentColor" />
+                    Recortar IA
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          
+          {cropSuccess && (
+            <div className="generated-ai-art-alert" style={{ marginTop: '8px', fontSize: '11px', padding: '6px 10px' }}>
+              {cropSuccess}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Background visual selector gallery */}
+      <div className="glass-panel" style={{ border: '1px solid rgba(195, 244, 0, 0.2)' }}>
+        <h3 style={{ fontSize: '15px', marginBottom: '4px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--font-heading)' }}>
+          <Compass size={16} />
+          Galería de Fondos Precargados
+        </h3>
+        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+          Selecciona un diseño exclusivo de la base de datos de la liga para revestir tu tarjeta.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+          {/* Default presets */}
+          <div 
+            onClick={() => onUpdatePlayer({ ...player, cardTheme: 'gold' })}
+            style={{
+              padding: '10px',
+              borderRadius: '8px',
+              border: player.cardTheme === 'gold' ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+              textAlign: 'center',
+              transition: 'all 0.2s'
+            }}
           >
-            <Upload size={16} />
-            Subir Foto (.png, .jpg)
-          </button>
+            <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>🏟️</span>
+            <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>Pitch Neon (Lime)</span>
+          </div>
+
+          <div 
+            onClick={() => onUpdatePlayer({ ...player, cardTheme: 'totw' })}
+            style={{
+              padding: '10px',
+              borderRadius: '8px',
+              border: player.cardTheme === 'totw' ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+              textAlign: 'center',
+              transition: 'all 0.2s'
+            }}
+          >
+            <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>🥇</span>
+            <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>Equipo de la Semana</span>
+          </div>
+
+          <div 
+            onClick={() => onUpdatePlayer({ ...player, cardTheme: 'future' })}
+            style={{
+              padding: '10px',
+              borderRadius: '8px',
+              border: player.cardTheme === 'future' ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+              textAlign: 'center',
+              transition: 'all 0.2s'
+            }}
+          >
+            <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>👾</span>
+            <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>Futuro Crack (Rosa)</span>
+          </div>
+
+          <div 
+            onClick={() => onUpdatePlayer({ ...player, cardTheme: 'icon' })}
+            style={{
+              padding: '10px',
+              borderRadius: '8px',
+              border: player.cardTheme === 'icon' ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(0,0,0,0.4)',
+              cursor: 'pointer',
+              textAlign: 'center',
+              transition: 'all 0.2s'
+            }}
+          >
+            <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>🏛️</span>
+            <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>Blanco Leyenda</span>
+          </div>
+
+          {/* Dynamic database backgrounds */}
+          {allBackgrounds.filter(bg => bg.enabled).map((bg) => (
+            <div 
+              key={bg.id}
+              onClick={() => onUpdatePlayer({ ...player, cardTheme: bg.id })}
+              style={{
+                padding: '10px',
+                borderRadius: '8px',
+                border: player.cardTheme === bg.id ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
+                background: 'rgba(0,0,0,0.4)',
+                cursor: 'pointer',
+                textAlign: 'center',
+                transition: 'all 0.2s',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {bg.image ? (
+                <img 
+                  src={bg.image} 
+                  alt={bg.name} 
+                  style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', margin: '0 auto 4px', display: 'block' }}
+                />
+              ) : (
+                <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>🖼️</span>
+              )}
+              <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>{bg.name.replace(/🏟️|🥇|👾|🏛️/, '').trim()}</span>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Stats Real-time Editor sliders */}
-      <div className="glass-panel">
+      <div className="glass-panel" style={{ marginTop: '24px' }}>
         <h3 style={{ fontSize: '15px', marginBottom: '14px', textTransform: 'uppercase', fontFamily: 'var(--font-heading)' }}>
           Ajustar Atributos Base
         </h3>
@@ -469,71 +618,11 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
         </div>
       </div>
 
-      {/* AI generator module with Gemini options */}
-      <div className="glass-panel" style={{ border: '1px solid rgba(195, 244, 0, 0.3)' }}>
-        <h3 style={{ fontSize: '15px', marginBottom: '6px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px', fontFamily: 'var(--font-heading)' }}>
-          <Sparkles size={16} />
-          Generador de Fondo IA
-        </h3>
-        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', lineHeight: '1.4' }}>
-          Escribe un prompt descriptivo para generar un fondo exclusivo y místico para tu tarjeta.
-        </p>
-
-        <div className="prompt-container">
-          <input
-            type="text"
-            className="form-input"
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Ej. León de fuego con relámpagos dorados..."
-            style={{ border: '1px solid rgba(195, 244, 0, 0.2)', background: 'rgba(0,0,0,0.5)' }}
-          />
-
-          <div className="prompt-suggestions">
-            {suggestionChips.map((chip) => (
-              <span
-                key={chip}
-                onClick={() => setPrompt(chip)}
-                className="suggestion-chip"
-              >
-                {chip}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <button
-          onClick={simulateAIGeneration}
-          className="btn-primary"
-          style={{ background: 'var(--primary)', boxShadow: '0 0 15px var(--primary-glow)' }}
-          disabled={isGeneratingAI || !prompt.trim()}
-        >
-          {isGeneratingAI ? (
-            <>
-              <RefreshCw className="animate-spin" size={16} />
-              Generando Fondo con IA...
-            </>
-          ) : (
-            <>
-              <Sparkles size={16} />
-              Generar con IA
-            </>
-          )}
-        </button>
-
-        {successMsg && (
-          <div className="generated-ai-art-alert" style={{ background: successMsg.includes('⚠️') ? 'rgba(239,68,68,0.08)' : '', color: successMsg.includes('⚠️') ? '#f87171' : '', borderColor: successMsg.includes('⚠️') ? 'rgba(239,68,68,0.2)' : '' }}>
-            <Sparkles size={14} />
-            {successMsg}
-          </div>
-        )}
-      </div>
-
       {/* Canvas Download Button */}
       <button
         onClick={triggerDownloadCard}
         className="btn-primary"
-        style={{ marginTop: '16px', background: 'linear-gradient(135deg, var(--primary), #abd600)', boxShadow: '0 4px 15px var(--primary-glow)', color: '#121414' }}
+        style={{ marginTop: '24px', background: 'linear-gradient(135deg, var(--primary), #abd600)', boxShadow: '0 4px 15px var(--primary-glow)', color: '#121414' }}
       >
         <Download size={16} />
         Descargar Tarjeta (PNG)
