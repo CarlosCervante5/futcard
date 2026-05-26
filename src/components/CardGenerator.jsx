@@ -66,19 +66,26 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
     return () => window.removeEventListener('storage', fetchBackgrounds);
   }, []);
 
-  // Filter theme options based on administrator settings
-  const themeOptions = [
-    { value: 'gold', label: 'Pitch Neon (Oro / Lime)' },
-    { value: 'icon', label: 'Clásico Blanco / Leyenda' },
-    { value: 'totw', label: 'Equipo de la Semana' },
-    { value: 'future', label: 'Futuro Crack' },
-    ...allBackgrounds
-      .filter(bg => bg.enabled)
-      .map(bg => ({
-        value: bg.id,
-        label: bg.name
-      }))
-  ];
+  // Auto-migrate legacy gradient keys to high-fidelity database backgrounds
+  useEffect(() => {
+    if (player.cardTheme === 'gold') {
+      onUpdatePlayer({ ...player, cardTheme: 'neon_pitch' });
+    } else if (player.cardTheme === 'totw') {
+      onUpdatePlayer({ ...player, cardTheme: 'golden_shield' });
+    } else if (player.cardTheme === 'future') {
+      onUpdatePlayer({ ...player, cardTheme: 'cyber_grid' });
+    } else if (player.cardTheme === 'icon') {
+      onUpdatePlayer({ ...player, cardTheme: 'legend_marble' });
+    }
+  }, [player.cardTheme]);
+
+  // Filter theme options strictly based on dynamic preloaded backgrounds (removing duplicates)
+  const themeOptions = allBackgrounds
+    .filter(bg => bg.enabled)
+    .map(bg => ({
+      value: bg.id,
+      label: bg.name
+    }));
 
   const positions = ['POR', 'DFC', 'LD', 'LI', 'MCD', 'MC', 'MCO', 'ED', 'EI', 'DEL'];
 
@@ -495,99 +502,39 @@ const CardGenerator = ({ player, onUpdatePlayer }) => {
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-          {/* Default presets */}
-          <div 
-            onClick={() => onUpdatePlayer({ ...player, cardTheme: 'gold' })}
-            style={{
-              padding: '10px',
-              borderRadius: '8px',
-              border: player.cardTheme === 'gold' ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(0,0,0,0.4)',
-              cursor: 'pointer',
-              textAlign: 'center',
-              transition: 'all 0.2s'
-            }}
-          >
-            <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>🏟️</span>
-            <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>Pitch Neon (Lime)</span>
-          </div>
-
-          <div 
-            onClick={() => onUpdatePlayer({ ...player, cardTheme: 'totw' })}
-            style={{
-              padding: '10px',
-              borderRadius: '8px',
-              border: player.cardTheme === 'totw' ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(0,0,0,0.4)',
-              cursor: 'pointer',
-              textAlign: 'center',
-              transition: 'all 0.2s'
-            }}
-          >
-            <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>🥇</span>
-            <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>Equipo de la Semana</span>
-          </div>
-
-          <div 
-            onClick={() => onUpdatePlayer({ ...player, cardTheme: 'future' })}
-            style={{
-              padding: '10px',
-              borderRadius: '8px',
-              border: player.cardTheme === 'future' ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(0,0,0,0.4)',
-              cursor: 'pointer',
-              textAlign: 'center',
-              transition: 'all 0.2s'
-            }}
-          >
-            <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>👾</span>
-            <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>Futuro Crack (Rosa)</span>
-          </div>
-
-          <div 
-            onClick={() => onUpdatePlayer({ ...player, cardTheme: 'icon' })}
-            style={{
-              padding: '10px',
-              borderRadius: '8px',
-              border: player.cardTheme === 'icon' ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
-              background: 'rgba(0,0,0,0.4)',
-              cursor: 'pointer',
-              textAlign: 'center',
-              transition: 'all 0.2s'
-            }}
-          >
-            <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>🏛️</span>
-            <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>Blanco Leyenda</span>
-          </div>
-
-          {/* Dynamic database backgrounds */}
           {allBackgrounds.filter(bg => bg.enabled).map((bg) => (
             <div 
               key={bg.id}
               onClick={() => onUpdatePlayer({ ...player, cardTheme: bg.id })}
               style={{
-                padding: '10px',
+                padding: '12px 8px',
                 borderRadius: '8px',
                 border: player.cardTheme === bg.id ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
                 background: 'rgba(0,0,0,0.4)',
                 cursor: 'pointer',
                 textAlign: 'center',
                 transition: 'all 0.2s',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: player.cardTheme === bg.id ? '0 0 10px rgba(195, 244, 0, 0.15)' : 'none'
               }}
             >
               {bg.image ? (
-                <img 
-                  src={bg.image} 
-                  alt={bg.name} 
-                  style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', margin: '0 auto 4px', display: 'block' }}
-                />
+                <div style={{ width: '48px', height: '48px', margin: '0 auto 8px', position: 'relative', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <img 
+                    src={bg.image} 
+                    alt={bg.name} 
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
               ) : (
-                <span style={{ fontSize: '20px', display: 'block', marginBottom: '4px' }}>🖼️</span>
+                <span style={{ fontSize: '24px', display: 'block', marginBottom: '8px' }}>🖼️</span>
               )}
-              <span style={{ fontSize: '11px', fontWeight: '500', display: 'block' }}>{bg.name.replace(/🏟️|🥇|👾|🏛️/, '').trim()}</span>
+              <span style={{ fontSize: '11px', fontWeight: '600', display: 'block', color: player.cardTheme === bg.id ? 'var(--primary)' : '#e2e2e2', textTransform: 'uppercase', letterSpacing: '0.5px', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                {bg.name.replace(/🏟️|🥇|👾|🏛️|Fondo/g, '').trim()}
+              </span>
             </div>
           ))}
         </div>
