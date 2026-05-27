@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Sparkles, Download, RefreshCw, Star, Compass } from 'lucide-react';
+import { Upload, Sparkles, Download, RefreshCw, Star, Compass, Camera, X, Check } from 'lucide-react';
 import PlayerCard from './PlayerCard';
 
 let API_BASE_URL = import.meta.env.VITE_API_URL || 'https://protective-education-production.up.railway.app';
@@ -8,6 +8,12 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
   const [isCroppingAI, setIsCroppingAI] = useState(false);
   const [cropSuccess, setCropSuccess] = useState('');
   const fileInputRef = useRef(null);
+
+  // ── Crop editor state (mirror of onboarding crop editor) ──
+  const [rawCardImage, setRawCardImage] = useState(null);
+  const [cardCropZoom, setCardCropZoom] = useState(1);
+  const [cardCropOffsetX, setCardCropOffsetX] = useState(0);
+  const [cardCropOffsetY, setCardCropOffsetY] = useState(0);
 
   // Load dynamic background settings from local storage & API (centralized admin DB)
   const [allBackgrounds, setAllBackgrounds] = useState([]);
@@ -35,7 +41,6 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
           console.error('Error parsing futcard_all_backgrounds:', e);
         }
       } else {
-        // Fallback default presets if nothing in localStorage yet
         const defaultBgs = [
           { id: 'neon_pitch', name: '🏟️ Fondo Pitch Neón', image: '/backgrounds/neon_pitch.png', enabled: true, isPreset: true },
           { id: 'golden_shield', name: '🥇 Fondo Escudo Dorado', image: '/backgrounds/golden_shield.png', enabled: true, isPreset: true },
@@ -47,13 +52,11 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
     };
 
     fetchBackgrounds();
-
-    // Listen for storage events (e.g. changes made in Web Admin on the same domain)
     window.addEventListener('storage', fetchBackgrounds);
     return () => window.removeEventListener('storage', fetchBackgrounds);
   }, []);
 
-  // Auto-migrate legacy gradient keys to high-fidelity database backgrounds
+  // Auto-migrate legacy gradient keys to database backgrounds
   useEffect(() => {
     if (player.cardTheme === 'gold') {
       onUpdatePlayer({ ...player, cardTheme: 'neon_pitch' });
@@ -66,13 +69,9 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
     }
   }, [player.cardTheme]);
 
-  // Filter theme options strictly based on dynamic preloaded backgrounds (removing duplicates)
   const themeOptions = allBackgrounds
     .filter(bg => bg.enabled)
-    .map(bg => ({
-      value: bg.id,
-      label: bg.name
-    }));
+    .map(bg => ({ value: bg.id, label: bg.name }));
 
   const positions = ['POR', 'DFC', 'LD', 'LI', 'MCD', 'MC', 'MCO', 'ED', 'EI', 'DEL'];
 
@@ -85,92 +84,133 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
     onUpdatePlayer({ ...player, skills: updatedSkills });
   };
 
+  // ── File picker: downscale then open crop editor ──
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const maxDim = 800;
-          let width = img.width;
-          let height = img.height;
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-          onUpdatePlayer({ ...player, avatar: canvas.toDataURL('image/jpeg', 0.8) });
-        };
-        img.src = event.target.result;
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 900;
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+          else { w = Math.round((w * maxDim) / h); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        // Open crop editor instead of applying directly
+        setRawCardImage(canvas.toDataURL('image/jpeg', 0.82));
+        setCardCropZoom(1);
+        setCardCropOffsetX(0);
+        setCardCropOffsetY(0);
       };
-      reader.readAsDataURL(file);
-    }
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    // Reset input so same file can be re-selected
+    e.target.value = '';
   };
 
-  // Intelligent client-side AI Silhouette Cropper (Background Removal)
+  // ── Apply crop from the editor canvas ──
+  const handleCardCropApply = () => {
+    if (!rawCardImage) return;
+    const img = new Image();
+    img.src = rawCardImage;
+    img.onload = () => {
+      const destSize = 300;
+      const cropBoxSize = 200;
+      const ratio = destSize / cropBoxSize;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = destSize;
+      canvas.height = destSize;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, destSize, destSize);
+
+      const minSide = Math.min(img.width, img.height);
+      const scaleFactor = (cropBoxSize / minSide) * cardCropZoom;
+      const drawW = img.width * scaleFactor * ratio;
+      const drawH = img.height * scaleFactor * ratio;
+      const drawX = (destSize - drawW) / 2 + cardCropOffsetX * ratio;
+      const drawY = (destSize - drawH) / 2 + cardCropOffsetY * ratio;
+
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      onUpdatePlayer({ ...player, avatar: canvas.toDataURL('image/jpeg', 0.85) });
+      setRawCardImage(null);
+    };
+  };
+
+  // ── AI background removal + composite on selected card background ──
   const removeBackgroundWithAI = async () => {
     if (!player.avatar) return;
     setIsCroppingAI(true);
     setCropSuccess('');
 
     try {
-      // 1. Simulate premium AI scanner delay
-      await new Promise(resolve => setTimeout(resolve, 2200));
+      await new Promise(resolve => setTimeout(resolve, 1800));
 
-      // 2. Perform client-side intelligent canvas color-similarity background removal
-      const croppedImage = await new Promise((resolve) => {
+      const activeBg = allBackgrounds.find(bg => bg.id === player.cardTheme);
+
+      const composited = await new Promise((resolve, reject) => {
         const img = new Image();
         img.src = player.avatar;
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
+          // Step 1: remove background
+          const tempCanvas = document.createElement('canvas');
+          tempCanvas.width = img.width;
+          tempCanvas.height = img.height;
+          const tempCtx = tempCanvas.getContext('2d');
+          tempCtx.drawImage(img, 0, 0);
 
-          const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const data = imgData.data;
-
-          // Corner color detection (typical background color)
-          const r = data[0], g = data[1], b = data[2];
-          const threshold = 65; // similarity threshold
-
-          for (let i = 0; i < data.length; i += 4) {
-            const currR = data[i];
-            const currG = data[i+1];
-            const currB = data[i+2];
-
-            const dist = Math.sqrt(
-              Math.pow(currR - r, 2) +
-              Math.pow(currG - g, 2) +
-              Math.pow(currB - b, 2)
-            );
-
-            // Also detect bright white or very light grey backgrounds
-            const isWhite = currR > 230 && currG > 230 && currB > 230;
-
-            if (dist < threshold || isWhite) {
-              data[i + 3] = 0; // Set transparency to 100%
-            }
+          const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+          const d = imgData.data;
+          // Sample corner colors for background detection
+          const rC = d[0], gC = d[1], bC = d[2];
+          const threshold = 60;
+          for (let i = 0; i < d.length; i += 4) {
+            const dr = d[i] - rC, dg = d[i+1] - gC, db = d[i+2] - bC;
+            const dist = Math.sqrt(dr*dr + dg*dg + db*db);
+            const isNearWhite = d[i] > 228 && d[i+1] > 228 && d[i+2] > 228;
+            if (dist < threshold || isNearWhite) d[i+3] = 0;
           }
+          tempCtx.putImageData(imgData, 0, 0);
+          const cutout = tempCanvas.toDataURL('image/png');
 
-          ctx.putImageData(imgData, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
+          // Step 2: composite on background (if image bg available)
+          if (activeBg && activeBg.image) {
+            const bgImg = new Image();
+            bgImg.onload = () => {
+              const outCanvas = document.createElement('canvas');
+              const SIZE = 400;
+              outCanvas.width = SIZE;
+              outCanvas.height = SIZE;
+              const outCtx = outCanvas.getContext('2d');
+              // Draw bg cropped to square
+              outCtx.drawImage(bgImg, 0, 0, SIZE, SIZE);
+              // Draw cutout centered slightly up (portrait framing)
+              const cutoutImg = new Image();
+              cutoutImg.onload = () => {
+                outCtx.drawImage(cutoutImg, 0, 0, SIZE, SIZE);
+                resolve(outCanvas.toDataURL('image/jpeg', 0.88));
+              };
+              cutoutImg.onerror = reject;
+              cutoutImg.src = cutout;
+            };
+            bgImg.onerror = () => resolve(cutout); // fallback: just the cutout
+            bgImg.src = activeBg.image;
+          } else {
+            // No bg image → just save the cutout
+            resolve(cutout);
+          }
         };
+        img.onerror = reject;
       });
 
-      onUpdatePlayer({ ...player, avatar: croppedImage });
-      setCropSuccess('✨ ¡Silueta recortada con IA y montada en tu tarjeta con éxito!');
+      onUpdatePlayer({ ...player, avatar: composited });
+      setCropSuccess('✨ ¡Silueta recortada y montada en el fondo de la tarjeta con éxito!');
     } catch (err) {
       console.error('Error cropping image:', err);
       setCropSuccess('⚠️ Error al recortar la silueta del jugador.');
@@ -181,127 +221,73 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
   };
 
   const triggerDownloadCard = () => {
-    // Compile and export card using HTML5 Canvas
     const canvas = document.createElement('canvas');
-    canvas.width = 560; // 2x FUT card standard width
-    canvas.height = 820; // 2x FUT card standard height
+    canvas.width = 560;
+    canvas.height = 820;
     const ctx = canvas.getContext('2d');
 
     const activeBg = allBackgrounds.find(bg => bg.id === player.cardTheme);
     const isImageTheme = !!activeBg;
 
     const drawCardDetails = () => {
-      // Inner card shape border
       ctx.fillStyle = 'rgba(18, 20, 20, 0.94)';
       ctx.fillRect(8, 8, canvas.width - 16, canvas.height - 16);
 
-      // Card Details - Header Rating & Position using Pitch Pulse typography
       const ratingKeys = ['pac', 'sho', 'pas', 'dri', 'def', 'phy'];
       const calculatedRating = Math.round(
         ratingKeys.reduce((acc, k) => acc + (player.skills[k]?.value || 50), 0) / ratingKeys.length
       );
 
-      // Determine colors dynamically
-      let ratingColor = '#c3f400';
-      let nameColor = '#c3f400';
-
-      if (player.cardTheme === 'icon') {
-        ratingColor = '#ffffff';
-        nameColor = '#ffffff';
-      } else if (player.cardTheme === 'future') {
-        ratingColor = '#ec4899';
-        nameColor = '#ec4899';
-      } else if (player.cardTheme === 'totw') {
-        ratingColor = '#fbbf24';
-        nameColor = '#fbbf24';
-      } else if (player.cardTheme === 'neon_pitch') {
-        ratingColor = '#c3f400';
-        nameColor = '#c3f400';
-      } else if (player.cardTheme === 'golden_shield') {
-        ratingColor = '#fbbf24';
-        nameColor = '#fbbf24';
-      } else if (player.cardTheme === 'cyber_grid') {
-        ratingColor = '#ec4899';
-        nameColor = '#ec4899';
-      } else if (player.cardTheme === 'legend_marble') {
-        ratingColor = '#ffffff';
-        nameColor = '#ffffff';
-      } else if (isImageTheme) {
-        // Fallback color schemes for custom uploaded background designs
-        ratingColor = '#c3f400';
-        nameColor = '#ffffff';
-      }
+      let ratingColor = '#c3f400', nameColor = '#c3f400';
+      if (player.cardTheme === 'icon' || player.cardTheme === 'legend_marble') { ratingColor = '#ffffff'; nameColor = '#ffffff'; }
+      else if (player.cardTheme === 'future' || player.cardTheme === 'cyber_grid') { ratingColor = '#ec4899'; nameColor = '#ec4899'; }
+      else if (player.cardTheme === 'totw' || player.cardTheme === 'golden_shield') { ratingColor = '#fbbf24'; nameColor = '#fbbf24'; }
+      else if (isImageTheme) { ratingColor = '#c3f400'; nameColor = '#ffffff'; }
 
       ctx.fillStyle = ratingColor;
-      ctx.font = 'italic 120px Anton, sans-serif'; // Condensed huge look
+      ctx.font = 'italic 120px Anton, sans-serif';
       ctx.fillText(calculatedRating.toString(), 35, 140);
 
       ctx.fillStyle = '#e2e2e2';
-      ctx.font = '500 24px JetBrains Mono, monospace'; // Monospace sub-details
+      ctx.font = '500 24px JetBrains Mono, monospace';
       ctx.fillText(player.position, 40, 195);
 
-      // Separator line
       ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(40, 220);
-      ctx.lineTo(130, 220);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(40, 220); ctx.lineTo(130, 220); ctx.stroke();
 
-      // Flag or logo placeholder
-      ctx.font = '36px Arial';
-      ctx.fillText('🇲🇽', 40, 280);
-      ctx.font = '28px Arial';
-      ctx.fillText('⚽', 40, 335);
+      ctx.font = '36px Arial'; ctx.fillText('🇲🇽', 40, 280);
+      ctx.font = '28px Arial'; ctx.fillText('⚽', 40, 335);
 
-      // Player Name using Anton font
       ctx.textAlign = 'center';
       ctx.fillStyle = nameColor;
       ctx.font = 'italic 44px Anton, sans-serif';
       ctx.fillText(player.name.toUpperCase(), canvas.width / 2, 490);
 
-      // Horizontal split border
       ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-      ctx.beginPath();
-      ctx.moveTo(40, 520);
-      ctx.lineTo(canvas.width - 40, 520);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(40, 520); ctx.lineTo(canvas.width - 40, 520); ctx.stroke();
 
-      // Draw Stats 3x2 grid in JetBrains Mono / Anton
       ctx.textAlign = 'left';
       ctx.font = '500 22px JetBrains Mono, monospace';
       ctx.fillStyle = '#8d928d';
-      
-      // PAC, SHO, PAS
-      ctx.fillText('RIT', 60, 570);
-      ctx.fillText('TIR', 60, 620);
-      ctx.fillText('PAS', 60, 670);
+      ctx.fillText('RIT', 60, 570); ctx.fillText('TIR', 60, 620); ctx.fillText('PAS', 60, 670);
+      ctx.fillText('REG', canvas.width / 2 + 40, 570); ctx.fillText('DEF', canvas.width / 2 + 40, 620); ctx.fillText('FIS', canvas.width / 2 + 40, 670);
 
-      // DRI, DEF, PHY
-      ctx.fillText('REG', canvas.width / 2 + 40, 570);
-      ctx.fillText('DEF', canvas.width / 2 + 40, 620);
-      ctx.fillText('FIS', canvas.width / 2 + 40, 670);
-
-      // Dynamic stat values in Anton
       ctx.textAlign = 'right';
       ctx.fillStyle = '#ffffff';
       ctx.font = '400 28px Anton, sans-serif';
-      
       ctx.fillText(player.skills.pac?.value.toString(), canvas.width / 2 - 60, 570);
       ctx.fillText(player.skills.sho?.value.toString(), canvas.width / 2 - 60, 620);
       ctx.fillText(player.skills.pas?.value.toString(), canvas.width / 2 - 60, 670);
-
       ctx.fillText(player.skills.dri?.value.toString(), canvas.width - 60, 570);
       ctx.fillText(player.skills.def?.value.toString(), canvas.width - 60, 620);
       ctx.fillText(player.skills.phy?.value.toString(), canvas.width - 60, 670);
 
-      // Team Footer Branding
       ctx.textAlign = 'center';
       ctx.font = '500 22px JetBrains Mono, monospace';
       ctx.fillStyle = '#8d928d';
       ctx.fillText(player.club.toUpperCase(), canvas.width / 2, 755);
 
-      // Draw cropped avatar image if available
       if (player.avatar) {
         const avatarImg = new Image();
         avatarImg.onload = () => {
@@ -315,52 +301,20 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
         };
         avatarImg.src = player.avatar;
       } else {
-        // Draw placeholder outline silhouette using canvas paths
         ctx.fillStyle = '#1a1c1c';
-        ctx.beginPath();
-        ctx.arc(canvas.width / 2 + 100, 240, 90, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(canvas.width / 2 + 100, 390, 130, 90, 0, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.beginPath(); ctx.arc(canvas.width / 2 + 100, 240, 90, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(canvas.width / 2 + 100, 390, 130, 90, 0, 0, Math.PI * 2); ctx.fill();
         triggerSave(canvas);
       }
     };
 
     if (isImageTheme && activeBg) {
-      // Draw background image first
       const bgImg = new Image();
-      bgImg.onload = () => {
-        ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-        drawCardDetails();
-      };
+      bgImg.onload = () => { ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height); drawCardDetails(); };
       bgImg.src = activeBg.image;
     } else {
-      // Fallback/Gradient background
       let bgGrad = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-      if (player.cardTheme === 'gold') {
-        bgGrad.addColorStop(0, '#121414');
-        bgGrad.addColorStop(0.5, '#1e2020');
-        bgGrad.addColorStop(1, '#c3f400');
-      } else if (player.cardTheme === 'icon') {
-        bgGrad.addColorStop(0, '#121414');
-        bgGrad.addColorStop(0.5, '#38393a');
-        bgGrad.addColorStop(1, '#ffffff');
-      } else if (player.cardTheme === 'totw') {
-        bgGrad.addColorStop(0, '#121414');
-        bgGrad.addColorStop(0.5, '#1c1c1c');
-        bgGrad.addColorStop(1, '#fbbf24');
-      } else if (player.cardTheme === 'future') {
-        bgGrad.addColorStop(0, '#121414');
-        bgGrad.addColorStop(0.5, '#1e1b4b');
-        bgGrad.addColorStop(1, '#ec4899');
-      } else {
-        bgGrad.addColorStop(0, '#121414');
-        bgGrad.addColorStop(0.5, '#1e2020');
-        bgGrad.addColorStop(1, '#c3f400');
-      }
-
+      bgGrad.addColorStop(0, '#121414'); bgGrad.addColorStop(0.5, '#1e2020'); bgGrad.addColorStop(1, '#c3f400');
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       drawCardDetails();
@@ -374,6 +328,90 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
     link.click();
   };
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // If crop editor is open, show it full-screen within the component
+  if (rawCardImage) {
+    return (
+      <div style={{ paddingBottom: '32px' }}>
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#fff', fontWeight: 'bold', width: '100%', textAlign: 'left', fontFamily: 'var(--font-heading)' }}>
+            ✂️ Ajustar Encuadre
+          </h4>
+
+          {/* Crop viewport with silhouette overlay */}
+          <div style={{ width: '260px', height: '260px', borderRadius: '12px', border: '2px solid var(--primary)', background: '#121414', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(195,244,0,0.2)', marginBottom: '12px' }}>
+            <img
+              src={rawCardImage}
+              alt="Encuadre"
+              style={{
+                width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none',
+                transform: `translate(${cardCropOffsetX}px, ${cardCropOffsetY}px) scale(${cardCropZoom})`,
+                transition: 'transform 0.1s ease-out'
+              }}
+            />
+            {/* Silhouette SVG guide */}
+            <svg viewBox="0 0 100 100" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}>
+              <path d="M0,0 H100 V100 H0 Z M50,15 C41.7,15 35,21.7 35,30 C35,38.3 41.7,45 50,45 C58.3,45 65,38.3 65,30 C65,21.7 58.3,15 50,15 Z M15,85 C15,69.5 27.5,57 43,55.5 C43.5,55.4 44,55 44,54.5 V48 C42,47 41,45 41,42 C41,40 42,39 42,39 C42,39 43,35 43,32 H57 C57,35 58,39 58,39 C58,39 59,40 59,42 C59,45 58,47 56,48 V54.5 C56,55 56.5,55.4 57,55.5 C72.5,57 85,69.5 85,85 Z" fill="rgba(12,15,15,0.7)" fillRule="evenodd" />
+              <path d="M50,15 C41.7,15 35,21.7 35,30 C35,38.3 41.7,45 50,45 C58.3,45 65,38.3 65,30 C65,21.7 58.3,15 50,15 Z M15,85 C15,69.5 27.5,57 43,55.5 C43.5,55.4 44,55 44,54.5 V48 C42,47 41,45 41,42 C41,40 42,39 42,39 C42,39 43,35 43,32 H57 C57,35 58,39 58,39 C58,39 59,40 59,42 C59,45 58,47 56,48 V54.5 C56,55 56.5,55.4 57,55.5 C72.5,57 85,69.5 85,85 Z" stroke="var(--primary)" strokeWidth="1.5" strokeDasharray="3,3" fill="none" style={{ filter: 'drop-shadow(0 0 5px var(--primary))' }} />
+            </svg>
+          </div>
+
+          <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '0 0 12px 0', textAlign: 'center' }}>
+            Centra tu rostro y hombros dentro del contorno neón
+          </p>
+
+          {/* Zoom */}
+          <div style={{ width: '100%', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+              <span>Zoom</span>
+              <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{Math.round(cardCropZoom * 100)}%</span>
+            </div>
+            <input type="range" min="0.5" max="3.0" step="0.1" value={cardCropZoom} onChange={e => setCardCropZoom(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary)' }} />
+          </div>
+
+          {/* Horizontal */}
+          <div style={{ width: '100%', marginBottom: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+              <span>Mover Horizontal</span>
+              <span style={{ color: 'var(--primary)' }}>{cardCropOffsetX}px</span>
+            </div>
+            <input type="range" min="-120" max="120" value={cardCropOffsetX} onChange={e => setCardCropOffsetX(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary)' }} />
+          </div>
+
+          {/* Vertical */}
+          <div style={{ width: '100%', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+              <span>Mover Vertical</span>
+              <span style={{ color: 'var(--primary)' }}>{cardCropOffsetY}px</span>
+            </div>
+            <input type="range" min="-120" max="120" value={cardCropOffsetY} onChange={e => setCardCropOffsetY(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary)' }} />
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+            <button
+              onClick={() => setRawCardImage(null)}
+              className="btn-secondary"
+              style={{ flex: 1, padding: '10px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+            >
+              <X size={14} /> Cancelar
+            </button>
+            <button
+              onClick={handleCardCropApply}
+              className="btn-primary"
+              style={{ flex: 2, padding: '10px', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+            >
+              <Check size={14} /> Guardar Recorte
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ paddingBottom: '32px' }}>
       {!embedded && (
@@ -382,8 +420,6 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
             <Star size={18} fill="currentColor" color="var(--primary)" />
             Mi Card Studio
           </h2>
-
-          {/* Main card preview with metallic shimmer */}
           <PlayerCard player={player} />
         </>
       )}
@@ -393,108 +429,69 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
           Personalizar Datos
         </h3>
 
-        {/* Name and Position editor */}
         <div className="form-group">
           <label>Nombre del Jugador</label>
-          <input
-            type="text"
-            className="form-input"
-            value={player.name}
-            onChange={(e) => onUpdatePlayer({ ...player, name: e.target.value })}
-            placeholder="Nombre completo"
-          />
+          <input type="text" className="form-input" value={player.name} onChange={(e) => onUpdatePlayer({ ...player, name: e.target.value })} placeholder="Nombre completo" />
         </div>
 
         <div className="form-row">
           <div className="form-group">
             <label>Posición</label>
-            <select
-              className="form-select"
-              value={player.position}
-              onChange={(e) => onUpdatePlayer({ ...player, position: e.target.value })}
-            >
-              {positions.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
+            <select className="form-select" value={player.position} onChange={(e) => onUpdatePlayer({ ...player, position: e.target.value })}>
+              {positions.map((p) => (<option key={p} value={p}>{p}</option>))}
             </select>
           </div>
-
           <div className="form-group">
             <label>Club / Equipo</label>
-            <input
-              type="text"
-              className="form-input"
-              value={player.club}
-              onChange={(e) => onUpdatePlayer({ ...player, club: e.target.value })}
-              placeholder="Nombre del club"
-            />
+            <input type="text" className="form-input" value={player.club} onChange={(e) => onUpdatePlayer({ ...player, club: e.target.value })} placeholder="Nombre del club" />
           </div>
         </div>
 
-        {/* Special commemorate themes list */}
         <div className="form-group">
           <label>Estilo de Tarjeta Conmemorativa</label>
-          <select
-            className="form-select"
-            value={player.cardTheme}
-            onChange={(e) => onUpdatePlayer({ ...player, cardTheme: e.target.value })}
-          >
-            {themeOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
+          <select className="form-select" value={player.cardTheme} onChange={(e) => onUpdatePlayer({ ...player, cardTheme: e.target.value })}>
+            {themeOptions.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
           </select>
         </div>
 
-        {/* Custom Picture Upload Button with AI Silhouette Cropper */}
+        {/* Photo upload → opens crop editor */}
         <div className="form-group">
           <label>Foto del Jugador</label>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleAvatarChange}
-            accept="image/*"
-            style={{ display: 'none' }}
-          />
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <input type="file" ref={fileInputRef} onChange={handleAvatarChange} accept="image/*" style={{ display: 'none' }} />
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               onClick={() => fileInputRef.current?.click()}
               className="btn-secondary"
-              style={{ flex: 1, borderStyle: 'dashed' }}
+              style={{ flex: 1, minWidth: '120px', borderStyle: 'dashed' }}
             >
               <Upload size={16} />
-              Subir Foto
+              {player.avatar ? 'Cambiar Foto' : 'Subir Foto'}
             </button>
-            
+
             {player.avatar && (
               <button
                 onClick={removeBackgroundWithAI}
                 className="btn-primary"
-                style={{ 
-                  flex: 1, 
-                  background: 'var(--primary)', 
-                  boxShadow: '0 0 10px var(--primary-glow)', 
-                  color: '#121414',
-                  fontSize: '13px'
-                }}
+                style={{ flex: 1, minWidth: '120px', background: 'var(--primary)', boxShadow: '0 0 10px var(--primary-glow)', color: '#121414', fontSize: '13px' }}
                 disabled={isCroppingAI}
               >
                 {isCroppingAI ? (
-                  <>
-                    <RefreshCw className="animate-spin" size={14} />
-                    Recortando...
-                  </>
+                  <><RefreshCw className="animate-spin" size={14} /> Procesando...</>
                 ) : (
-                  <>
-                    <Sparkles size={14} fill="currentColor" />
-                    Recortar IA
-                  </>
+                  <><Sparkles size={14} fill="currentColor" /> Recortar + Fondo IA</>
                 )}
               </button>
             )}
           </div>
-          
+
+          {/* Avatar preview thumbnail */}
+          {player.avatar && (
+            <div style={{ marginTop: '10px', width: '64px', height: '64px', borderRadius: '8px', overflow: 'hidden', border: '2px solid var(--primary)', boxShadow: '0 0 8px var(--primary-glow)' }}>
+              <img src={player.avatar} alt="Avatar preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          )}
+
           {cropSuccess && (
             <div className="generated-ai-art-alert" style={{ marginTop: '8px', fontSize: '11px', padding: '6px 10px' }}>
               {cropSuccess}
@@ -510,36 +507,25 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
           Galería de Fondos Precargados
         </h3>
         <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
-          Selecciona un diseño exclusivo de la base de datos de la liga para revestir tu tarjeta.
+          Selecciona un diseño. Al usar "Recortar + Fondo IA" la foto se composita sobre el fondo elegido.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
           {allBackgrounds.filter(bg => bg.enabled).map((bg) => (
-            <div 
+            <div
               key={bg.id}
               onClick={() => onUpdatePlayer({ ...player, cardTheme: bg.id })}
               style={{
-                padding: '12px 8px',
-                borderRadius: '8px',
+                padding: '12px 8px', borderRadius: '8px',
                 border: player.cardTheme === bg.id ? '2px solid var(--primary)' : '1px solid rgba(255,255,255,0.08)',
-                background: 'rgba(0,0,0,0.4)',
-                cursor: 'pointer',
-                textAlign: 'center',
-                transition: 'all 0.2s',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
+                background: 'rgba(0,0,0,0.4)', cursor: 'pointer', textAlign: 'center', transition: 'all 0.2s',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                 boxShadow: player.cardTheme === bg.id ? '0 0 10px rgba(195, 244, 0, 0.15)' : 'none'
               }}
             >
               {bg.image ? (
                 <div style={{ width: '48px', height: '48px', margin: '0 auto 8px', position: 'relative', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <img 
-                    src={bg.image} 
-                    alt={bg.name} 
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
+                  <img src={bg.image} alt={bg.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 </div>
               ) : (
                 <span style={{ fontSize: '24px', display: 'block', marginBottom: '8px' }}>🖼️</span>
@@ -552,32 +538,22 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
         </div>
       </div>
 
-      {/* Stats Real-time Editor sliders */}
+      {/* Stats editor */}
       <div className="glass-panel" style={{ marginTop: '24px' }}>
         <h3 style={{ fontSize: '15px', marginBottom: '14px', textTransform: 'uppercase', fontFamily: 'var(--font-heading)' }}>
           Ajustar Atributos Base
         </h3>
-        
         <div className="stat-adjuster-grid">
           {Object.keys(player.skills).map((key) => (
             <div key={key} className="stat-adjuster-card">
-              <span className="stat-adjuster-label">
-                {player.skills[key].name}
-              </span>
-              <input
-                type="number"
-                className="stat-adjuster-input"
-                value={player.skills[key].value}
-                onChange={(e) => handleStatChange(key, e.target.value)}
-                min="0"
-                max="99"
-              />
+              <span className="stat-adjuster-label">{player.skills[key].name}</span>
+              <input type="number" className="stat-adjuster-input" value={player.skills[key].value} onChange={(e) => handleStatChange(key, e.target.value)} min="0" max="99" />
             </div>
           ))}
         </div>
       </div>
 
-      {/* Canvas Download Button */}
+      {/* Download button */}
       <button
         onClick={triggerDownloadCard}
         className="btn-primary"
