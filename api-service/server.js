@@ -147,11 +147,6 @@ function canResend(email) {
   resendTracker[email] = record;
   return true;
 }
-    action: action
-  };
-  dbData.auditLogs = [logEntry, ...(dbData.auditLogs || [])];
-  writeDb(dbData);
-}
 
 // ==========================================
 // 1. AUTH ENDPOINTS
