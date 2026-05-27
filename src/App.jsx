@@ -602,9 +602,18 @@ function App() {
 
               <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Diseño de la Tarjeta</label>
               <select value={onboardTheme} onChange={e => setOnboardTheme(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '20px', background: '#121414', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}>
-                {db.backgrounds && db.backgrounds.filter(b => b.enabled).map(bg => (
-                  <option key={bg.id} value={bg.id}>{bg.name}</option>
-                ))}
+                {db.backgrounds && db.backgrounds.length > 0 ? (
+                  db.backgrounds.filter(b => b.enabled).map(bg => (
+                    <option key={bg.id} value={bg.id}>{bg.name}</option>
+                  ))
+                ) : (
+                  <>
+                    <option value="gold">🏆 Oro Clásico</option>
+                    <option value="totw">⚡ Equipo de la Semana (TOTW)</option>
+                    <option value="future">🌌 Futura Promesa Neon</option>
+                    <option value="icon">🎖️ Icono Leyenda Blanca</option>
+                  </>
+                )}
               </select>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>

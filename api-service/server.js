@@ -502,7 +502,8 @@ app.get('/api/federation', (req, res) => {
     players: dbData.players || [],
     dts: dbData.dts || [],
     referees: dbData.referees || [],
-    leagues: dbData.leagues || []
+    leagues: dbData.leagues || [],
+    backgrounds: dbData.backgrounds || []
   });
 });
 
