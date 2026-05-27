@@ -12,11 +12,10 @@ function App() {
   const [db, setDb] = useState(getAppData());
   const [activeTab, setActiveTab] = useState('feed'); // feed, studio, my-profile, league-panel
   const [feedSegment, setFeedSegment] = useState('players'); // players, dts, referees explore filter
-  const [showRoleModal, setShowRoleModal] = useState(false);
   const [activeUser, setActiveUser] = useState({
-    id: 'user-guest',
-    name: 'Invitado Fan',
-    role: 'guest', // guest, player, dt, referee
+    id: 'p-1',
+    name: 'Santiago Giménez',
+    role: 'player', // Default logged-in player Santiago
   });
   const [sharedPlayerId, setSharedPlayerId] = useState(null);
 
@@ -113,13 +112,6 @@ function App() {
           ⚽ FutCard <span style={{ fontWeight: '400', fontSize: '13px', marginLeft: '4px', opacity: 0.8 }}>Pro</span>
         </div>
 
-        {/* Identity Simulator trigger badge */}
-        <div className="role-switcher-badge" onClick={() => setShowRoleModal(true)}>
-          <span style={{ fontSize: '10px' }}>Swap Rol:</span>
-          <span style={{ color: activeUser.role === 'guest' ? 'var(--text-secondary)' : activeUser.role === 'player' ? 'var(--primary)' : activeUser.role === 'dt' ? 'var(--accent-gold)' : 'var(--accent-cyan)' }}>
-            {activeUser.name.split(' ')[0]} ({activeUser.role.toUpperCase()})
-          </span>
-        </div>
       </header>
 
       {/* 2. Main Content View Body */}
@@ -392,87 +384,7 @@ function App() {
         </nav>
       )}
 
-      {/* 4. Role Selector Modal Overlay (Simulator Panel) */}
-      {showRoleModal && (
-        <div className="role-modal-overlay" onClick={() => setShowRoleModal(false)}>
-          <div className="role-modal-content" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <h3 className="role-modal-title">
-                <Sliders size={18} color="var(--primary)" />
-                Simulador de Roles
-              </h3>
-              <button
-                onClick={() => setShowRoleModal(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <p className="role-modal-desc">
-              Cambia tu identidad activa para probar la lógica de los avales (+1 ordinario, +5 oficial si el DT/Árbitro está validado por la liga).
-            </p>
 
-            {/* Guest Fan Card */}
-            <div
-              className={`role-option-card ${activeUser.role === 'guest' ? 'selected' : ''}`}
-              onClick={() => handleSelectRole('guest')}
-            >
-              <div style={{ fontSize: '24px' }}>👥</div>
-              <div className="role-option-info">
-                <span className="role-option-name">Invitado (Espectador)</span>
-                <span className="role-option-summary">Otorga avales estándar (+1 punto) a las habilidades.</span>
-              </div>
-            </div>
-
-            {/* Standard Player Card */}
-            <div
-              className={`role-option-card ${activeUser.role === 'player' ? 'selected' : ''}`}
-              onClick={() => handleSelectRole('player')}
-            >
-              <div style={{ fontSize: '24px' }}>🏃‍♂️</div>
-              <div className="role-option-info">
-                <span className="role-option-name">Santiago Giménez (Jugador)</span>
-                <span className="role-option-summary">Edita sus propias tarjetas, historial de equipos y otorga avales estándar (+1).</span>
-              </div>
-            </div>
-
-            {/* Technical Director Card */}
-            <div
-              className={`role-option-card ${activeUser.role === 'dt' ? 'selected' : ''}`}
-              onClick={() => handleSelectRole('dt')}
-            >
-              <div style={{ fontSize: '24px' }}>📋</div>
-              <div className="role-option-info">
-                <span className="role-option-name">Guillermo Almada (Director Técnico)</span>
-                <span className="role-option-summary">
-                  {db.dts[0].verifiedLeagues?.includes('liga-1') 
-                    ? '🟢 Habilitado por Liga MX: ¡Otorga avales oficiales de +5 puntos!'
-                    : '🔴 Licencia inactiva: Otorga avales de +1 punto. Actívalo en la pestaña "Liga FMF".'
-                  }
-                </span>
-              </div>
-            </div>
-
-            {/* Referee Card */}
-            <div
-              className={`role-option-card ${activeUser.role === 'referee' ? 'selected' : ''}`}
-              onClick={() => handleSelectRole('referee')}
-            >
-              <div style={{ fontSize: '24px' }}>🏁</div>
-              <div className="role-option-info">
-                <span className="role-option-name">César Arturo Ramos (Árbitro)</span>
-                <span className="role-option-summary">
-                  {db.referees[0].verifiedLeagues?.includes('liga-1')
-                    ? '🟢 Habilitado por Liga MX: ¡Otorga avales oficiales de +5 puntos!'
-                    : '🔴 Licencia inactiva: Otorga avales de +1 punto. Actívalo en la pestaña "Liga FMF".'
-                  }
-                </span>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
