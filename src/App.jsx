@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Compass, Star, User, Sliders, Sparkles, RefreshCw, X, Award } from 'lucide-react';
+import { ShieldCheck, Compass, Star, User, Sliders, Sparkles, RefreshCw, X, Award, Eye, EyeOff } from 'lucide-react';
 import { getAppData, saveAppData, resetAppData } from './data/mockData';
 import PlayerCard from './components/PlayerCard';
 import CardGenerator from './components/CardGenerator';
@@ -8,14 +8,38 @@ import RoleManager from './components/RoleManager';
 import LeagueSim from './components/LeagueSim';
 import SharedProfileView from './components/SharedProfileView';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://protective-education-production.up.railway.app';
+
 function App() {
+  const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('futcard_jwt') || '');
   const [db, setDb] = useState(getAppData());
   const [activeTab, setActiveTab] = useState('feed'); // feed, studio, my-profile, league-panel
   const [feedSegment, setFeedSegment] = useState('players'); // players, dts, referees explore filter
-  const [activeUser, setActiveUser] = useState({
-    id: 'p-1',
-    name: 'Santiago Giménez',
-    role: 'player', // Default logged-in player Santiago
+
+  // Auth state variables
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [loginShake, setLoginShake] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [registerName, setRegisterName] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerNickname, setRegisterNickname] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerConfirmPassword, setRegisterConfirmPassword] = useState('');
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false);
+  const [registerRole, setRegisterRole] = useState('Jugador');
+  const [registerError, setRegisterError] = useState('');
+
+  const [activeUser, setActiveUser] = useState(() => {
+    const saved = sessionStorage.getItem('futcard_active_admin');
+    return saved ? JSON.parse(saved) : {
+      id: 'p-1',
+      name: 'Santiago Giménez',
+      role: 'player', // Default logged-in player Santiago
+    };
   });
   const [sharedPlayerId, setSharedPlayerId] = useState(null);
 
@@ -27,6 +51,25 @@ function App() {
       setSharedPlayerId(sharedId);
     }
   }, []);
+
+  // Fetch data from backend when auth token is available
+  useEffect(() => {
+    if (!authToken) return;
+    const fetchData = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/federation`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setDb(data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch federation data', e);
+      }
+    };
+    fetchData();
+  }, [authToken]);
 
   const handleUpdatePlayer = (updatedPlayer) => {
     const nextPlayers = db.players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p);
@@ -95,15 +138,190 @@ function App() {
     window.history.replaceState({}, document.title, window.location.pathname);
   };
 
+  // Auth: Handle Sign In via Express JWT login
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!loginEmail.trim() || !loginPassword.trim()) return;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        sessionStorage.setItem('futcard_active_admin', JSON.stringify(data.user));
+        sessionStorage.setItem('futcard_jwt', data.token);
+        setAuthToken(data.token);
+        setActiveUser(data.user);
+        setLoginEmail('');
+        setLoginPassword('');
+        setLoginError('');
+      } else {
+        throw new Error(data.error || 'Credenciales incorrectas.');
+      }
+    } catch (err) {
+      setLoginShake(true);
+      setLoginError(err.message || 'Error al conectar con el servidor.');
+      setTimeout(() => setLoginShake(false), 500);
+    }
+  };
+
+  // Auth: Simple Register
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!registerName || !registerEmail || !registerPassword || !registerConfirmPassword) {
+      setRegisterError('Completa todos los campos obligatorios.');
+      return;
+    }
+    if (registerPassword !== registerConfirmPassword) {
+      setRegisterError('Las contraseñas no coinciden.');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: registerName, email: registerEmail, password: registerPassword, role: registerRole, nickname: registerNickname })
+      });
+      const result = await res.json();
+      if (res.ok) {
+        // Auto login after successful registration
+        const loginRes = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: registerEmail, password: registerPassword })
+        });
+        const loginData = await loginRes.json();
+        if (loginRes.ok) {
+          sessionStorage.setItem('futcard_active_admin', JSON.stringify(loginData.user));
+          sessionStorage.setItem('futcard_jwt', loginData.token);
+          setAuthToken(loginData.token);
+          setActiveUser(loginData.user);
+          setRegisterName('');
+          setRegisterEmail('');
+          setRegisterNickname('');
+          setRegisterPassword('');
+          setRegisterConfirmPassword('');
+          setRegisterError('');
+          setShowRegister(false);
+        }
+      } else {
+        throw new Error(result.error || 'Registro falló.');
+      }
+    } catch (err) {
+      setRegisterError(err.message);
+    }
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('futcard_jwt');
+    sessionStorage.removeItem('futcard_active_admin');
+    setAuthToken('');
+    setActiveUser({
+      id: 'p-1',
+      name: 'Santiago Giménez',
+      role: 'player',
+    });
+  };
+
   // Find currently shared player
   const sharedPlayer = db.players.find(p => p.id === sharedPlayerId);
   const myPlayerProfile = db.players[0]; // We represent player 1 Santiago
+
+  // If not authenticated and not viewing a shared profile, show login/register UI
+  if (!sharedPlayerId && !authToken) {
+    return (
+      <div className="login-overlay" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', background: '#0c0f0f' }}>
+        <div style={{ marginBottom: '24px', fontSize: '28px', fontWeight: 'bold', letterSpacing: '1px', color: '#fff', fontFamily: 'var(--font-heading)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          ⚽ FutCard <span style={{ color: 'var(--primary)', fontWeight: '400', fontSize: '22px' }}>Pro</span>
+        </div>
+        {showRegister ? (
+          <div className={`login-card ${loginShake ? 'shake-effect' : ''}`} style={{ width: '100%', maxWidth: '360px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '24px', borderRadius: '8px' }}>
+            <h2 style={{ color: '#fff', marginBottom: '16px', fontSize: '24px', fontFamily: 'var(--font-heading)' }}>Registro</h2>
+            {registerError && <span className="error" style={{ color: '#ef4444', fontSize: '12px', display: 'block', marginBottom: '12px' }}>{registerError}</span>}
+            <input placeholder="Nombre" value={registerName} onChange={e => setRegisterName(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }} />
+            <input placeholder="Email" value={registerEmail} onChange={e => setRegisterEmail(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }} />
+            <input placeholder="Apodo (Opcional)" value={registerNickname} onChange={e => setRegisterNickname(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }} />
+            
+            <div style={{ position: 'relative', width: '100%', marginBottom: '12px' }}>
+              <input
+                type={showRegisterPassword ? 'text' : 'password'}
+                placeholder="Contraseña"
+                value={registerPassword}
+                onChange={e => setRegisterPassword(e.target.value)}
+                style={{ width: '100%', padding: '10px 40px 10px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+              >
+                {showRegisterPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            <div style={{ position: 'relative', width: '100%', marginBottom: '12px' }}>
+              <input
+                type={showRegisterConfirmPassword ? 'text' : 'password'}
+                placeholder="Confirmar Contraseña"
+                value={registerConfirmPassword}
+                onChange={e => setRegisterConfirmPassword(e.target.value)}
+                style={{ width: '100%', padding: '10px 40px 10px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+              >
+                {showRegisterConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            <select value={registerRole} onChange={e => setRegisterRole(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '16px', background: '#121414', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}>
+              <option>Jugador</option>
+              <option>DT</option>
+              <option>Árbitro</option>
+            </select>
+            <button onClick={handleRegister} className="btn-primary" style={{ width: '100%', padding: '12px', marginBottom: '10px' }}>Crear Cuenta</button>
+            <button onClick={() => setShowRegister(false)} className="btn-secondary" style={{ width: '100%', padding: '10px', background: 'transparent', border: 'none', color: 'var(--text-muted)' }}>Volver a Login</button>
+          </div>
+        ) : (
+          <div className={`login-card ${loginShake ? 'shake-effect' : ''}`} style={{ width: '100%', maxWidth: '360px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', padding: '24px', borderRadius: '8px' }}>
+            <h2 style={{ color: '#fff', marginBottom: '16px', fontSize: '24px', fontFamily: 'var(--font-heading)' }}>Iniciar Sesión</h2>
+            {loginError && <span className="error" style={{ color: '#ef4444', fontSize: '12px', display: 'block', marginBottom: '12px' }}>{loginError}</span>}
+            <input placeholder="Email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }} />
+            
+            <div style={{ position: 'relative', width: '100%', marginBottom: '16px' }}>
+              <input
+                type={showLoginPassword ? 'text' : 'password'}
+                placeholder="Contraseña"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                style={{ width: '100%', padding: '10px 40px 10px 10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowLoginPassword(!showLoginPassword)}
+                style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+              >
+                {showLoginPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            <button onClick={handleLogin} className="btn-primary" style={{ width: '100%', padding: '12px', marginBottom: '10px' }}>Entrar</button>
+            <button onClick={() => setShowRegister(true)} className="btn-secondary" style={{ width: '100%', padding: '10px', background: 'transparent', border: 'none', color: 'var(--text-muted)' }}>Crear Cuenta</button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
       
       {/* 1. Global Navigation Header */}
-      <header className="app-header">
+      <header className="app-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="app-logo" style={{ cursor: 'pointer' }} onClick={() => {
           setSharedPlayerId(null);
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -111,7 +329,11 @@ function App() {
         }}>
           ⚽ FutCard <span style={{ fontWeight: '400', fontSize: '13px', marginLeft: '4px', opacity: 0.8 }}>Pro</span>
         </div>
-
+        {authToken && (
+          <button onClick={handleLogout} className="btn-logout" style={{ background: 'rgba(255, 68, 68, 0.1)', border: '1px solid rgba(255, 68, 68, 0.3)', color: '#ff6b6b', padding: '4px 10px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontFamily: 'var(--font-mono)' }}>
+            Cerrar Sesión
+          </button>
+        )}
       </header>
 
       {/* 2. Main Content View Body */}

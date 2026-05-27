@@ -175,7 +175,7 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(401).json({ error: 'Credenciales incorrectas.' });
   }
 
-  const userPayload = { id: admin.id, name: admin.name, email: admin.email, role: admin.role };
+  const userPayload = { id: admin.id, name: admin.name, email: admin.email, role: admin.role, nickname: admin.nickname || '' };
   const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '24h' });
   // Set HttpOnly Secure SameSite cookie
   res.cookie('__Host-auth', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
@@ -201,6 +201,7 @@ app.post('/api/auth/register', (req, res) => {
     email,
     password, // plain password for demo
     role,
+    nickname: req.body.nickname || '',
   };
   dbData.admins.push(newAdmin);
   writeDb(dbData);
