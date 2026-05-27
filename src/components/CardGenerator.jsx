@@ -153,6 +153,7 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
       // ── Step 1: Ask Gemini Vision what colors are the background ──
       let backgroundColors = ['#ffffff', '#f0f0f0'];
       let threshold = 55;
+      let usingFallback = true;
 
       try {
         const analysisResp = await fetch(`${API_BASE_URL}/api/ai/analyze-background`, {
@@ -164,6 +165,7 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
           const analysis = await analysisResp.json();
           if (analysis.backgroundColors?.length) backgroundColors = analysis.backgroundColors;
           if (analysis.threshold) threshold = analysis.threshold;
+          if (analysis.usingFallback !== undefined) usingFallback = analysis.usingFallback;
         }
       } catch (e) {
         console.warn('[AI BG] Could not reach analyze-background endpoint, using corner fallback:', e);
@@ -197,14 +199,14 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
           const imgData = ctx.getImageData(0, 0, SIZE, SIZE);
           const d = imgData.data;
 
-          // Also sample corners as extra background color hints
-          const cornerColors = [
-            { r: d[0], g: d[1], b: d[2] }, // top-left
-            { r: d[(SIZE - 1) * 4], g: d[(SIZE - 1) * 4 + 1], b: d[(SIZE - 1) * 4 + 2] }, // top-right
-            { r: d[(SIZE * (SIZE - 1)) * 4], g: d[(SIZE * (SIZE - 1)) * 4 + 1], b: d[(SIZE * (SIZE - 1)) * 4 + 2] }, // bottom-left
-            { r: d[(SIZE * SIZE - 1) * 4], g: d[(SIZE * SIZE - 1) * 4 + 1], b: d[(SIZE * SIZE - 1) * 4 + 2] }, // bottom-right
-          ];
-          const allTargets = [...targetColors, ...cornerColors];
+          // Only sample top corners as extra hints in fallback mode
+          const allTargets = [...targetColors];
+          if (usingFallback) {
+            allTargets.push(
+              { r: d[0], g: d[1], b: d[2] }, // top-left
+              { r: d[(SIZE - 1) * 4], g: d[(SIZE - 1) * 4 + 1], b: d[(SIZE - 1) * 4 + 2] } // top-right
+            );
+          }
 
           const colorDist = (r1, g1, b1, r2, g2, b2) =>
             Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);

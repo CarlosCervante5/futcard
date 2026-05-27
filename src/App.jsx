@@ -479,6 +479,7 @@ function App() {
     try {
       let backgroundColors = ['#ffffff', '#f0f0f0', '#e8e8e8'];
       let threshold = 55;
+      let usingFallback = true;
 
       try {
         const analysisResp = await fetch(`${API_BASE_URL}/api/ai/analyze-background`, {
@@ -490,6 +491,7 @@ function App() {
           const analysis = await analysisResp.json();
           if (analysis.backgroundColors?.length) backgroundColors = analysis.backgroundColors;
           if (analysis.threshold) threshold = analysis.threshold;
+          if (analysis.usingFallback !== undefined) usingFallback = analysis.usingFallback;
         }
       } catch (e) {
         console.warn('[Onboard AI BG] Could not reach endpoint, using fallback colors:', e);
@@ -514,14 +516,14 @@ function App() {
           const imgData = ctx.getImageData(0, 0, SIZE, SIZE);
           const d = imgData.data;
 
-          // Corner colors as extra background hints
-          const corners = [
-            { r: d[0], g: d[1], b: d[2] },
-            { r: d[(SIZE-1)*4], g: d[(SIZE-1)*4+1], b: d[(SIZE-1)*4+2] },
-            { r: d[SIZE*(SIZE-1)*4], g: d[SIZE*(SIZE-1)*4+1], b: d[SIZE*(SIZE-1)*4+2] },
-            { r: d[(SIZE*SIZE-1)*4], g: d[(SIZE*SIZE-1)*4+1], b: d[(SIZE*SIZE-1)*4+2] }
-          ];
-          const allTargets = [...targetColors, ...corners];
+          // Only sample top corners as extra background hints if using fallback
+          const allTargets = [...targetColors];
+          if (usingFallback) {
+            allTargets.push(
+              { r: d[0], g: d[1], b: d[2] }, // top-left
+              { r: d[(SIZE - 1) * 4], g: d[(SIZE - 1) * 4 + 1], b: d[(SIZE - 1) * 4 + 2] } // top-right
+            );
+          }
 
           const dist = (r1,g1,b1,r2,g2,b2) => Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2);
 

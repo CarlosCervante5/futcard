@@ -521,6 +521,7 @@ app.post('/api/ai/analyze-background', async (req, res) => {
     let parsed;
     try {
       parsed = JSON.parse(cleanText);
+      parsed.usingFallback = false;
     } catch {
       return res.json({ backgroundColors: ['#ffffff', '#f0f0f0'], threshold: 50, usingFallback: true });
     }
