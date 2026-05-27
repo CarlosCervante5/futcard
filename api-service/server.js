@@ -413,7 +413,7 @@ app.post('/api/config/test-gemini', authenticateToken, async (req, res) => {
   console.log(`[test-gemini] Using key: ${apiKey.slice(0,4)}...${apiKey.slice(-4)} (len=${apiKey.length})`);
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -453,6 +453,21 @@ app.post('/api/config/test-gemini', authenticateToken, async (req, res) => {
   }
 });
 
+// Diagnostic: list available Gemini models for the stored API key
+app.get('/api/config/list-gemini-models', authenticateToken, async (req, res) => {
+  const dbData = readDb();
+  const apiKey = dbData.geminiKey;
+  if (!apiKey) return res.status(400).json({ error: 'No hay API Key guardada.' });
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const data = await r.json();
+    const names = (data.models || []).map(m => m.name);
+    return res.json({ models: names });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // Secure Backend-For-Frontend (BFF) Proxy endpoint for players card prompt generations!
 app.post('/api/cards/generate-ai', async (req, res) => {
   const { prompt } = req.body;
@@ -473,7 +488,7 @@ app.post('/api/cards/generate-ai', async (req, res) => {
   }
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
