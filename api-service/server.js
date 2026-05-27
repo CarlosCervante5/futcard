@@ -409,6 +409,9 @@ app.post('/api/config/test-gemini', authenticateToken, async (req, res) => {
   if (!apiKey) return res.status(400).json({ error: 'No hay ninguna clave API Key de Gemini cargada en el servidor.' });
   if (!prompt) return res.status(400).json({ error: 'Especifica un prompt para ejecutar el análisis diagnóstico.' });
 
+  // Log key prefix for debugging (safe: only first/last 4 chars)
+  console.log(`[test-gemini] Using key: ${apiKey.slice(0,4)}...${apiKey.slice(-4)} (len=${apiKey.length})`);
+
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
@@ -423,9 +426,11 @@ app.post('/api/config/test-gemini', authenticateToken, async (req, res) => {
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error('Gemini API error response:', response.status, errText);
-      return res.status(502).json({ error: 'Error al comunicarse con la API de Gemini.' });
+      let geminiErr = {};
+      try { geminiErr = await response.json(); } catch { geminiErr = { message: await response.text() }; }
+      const detail = geminiErr?.error?.message || geminiErr?.message || 'Error desconocido';
+      console.error(`Gemini API error ${response.status}:`, detail);
+      return res.status(502).json({ error: `Error de Gemini (${response.status}): ${detail}` });
     }
 
     const data = await response.json();
@@ -437,14 +442,14 @@ app.post('/api/config/test-gemini', authenticateToken, async (req, res) => {
       parsed = JSON.parse(cleanText);
     } catch (parseErr) {
       console.error('Failed to parse Gemini JSON:', parseErr, 'raw:', cleanText);
-      return res.status(500).json({ error: 'Respuesta de Gemini no es un JSON válido.' });
+      return res.status(500).json({ error: 'Respuesta de Gemini no es un JSON válido.', raw: cleanText });
     }
 
     logAuditAction(req.user.email, `Prueba de sandbox Gemini exitosa para: "${prompt}"`);
     return res.json(parsed);
   } catch (err) {
     console.error('Error in Sandbox Gemini test:', err);
-    return res.status(500).json({ error: 'Error interno al ejecutar la prueba de Gemini.' });
+    return res.status(500).json({ error: 'Error interno al ejecutar la prueba de Gemini.', detail: err.message });
   }
 });
 
