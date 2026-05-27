@@ -53,7 +53,6 @@ app.use(cors({
     } else {
       callback(new Error('Blocked by CORS policy'));
     }
-    }
   },
   credentials: true
 }));
