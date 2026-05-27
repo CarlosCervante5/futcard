@@ -534,7 +534,18 @@ function App() {
             }
           }
           ctx.putImageData(imgData, 0, 0);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
+
+          // Composite the cutout on a dark card background so JPEG export stays clean
+          const compositeCanvas = document.createElement('canvas');
+          compositeCanvas.width = SIZE;
+          compositeCanvas.height = SIZE;
+          const compCtx = compositeCanvas.getContext('2d');
+          // Dark semi-transparent card background (matches card aesthetic)
+          compCtx.fillStyle = '#0c0f0f';
+          compCtx.fillRect(0, 0, SIZE, SIZE);
+          compCtx.drawImage(canvas, 0, 0);
+
+          resolve(compositeCanvas.toDataURL('image/jpeg', 0.88));
         };
         img.src = croppedBase64;
       });
