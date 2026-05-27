@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PlayerCard from './PlayerCard';
 import RadarChart from './RadarChart';
 import EndorsementSystem from './EndorsementSystem';
-import { Award, Trophy, UserCheck, Calendar } from 'lucide-react';
+import { Award, Trophy, UserCheck, Calendar, X } from 'lucide-react';
 
 const SharedProfileView = ({
   player,
@@ -10,6 +10,8 @@ const SharedProfileView = ({
   onUpdatePlayer,
   onGoToHome
 }) => {
+  const [showEndorseModal, setShowEndorseModal] = useState(false);
+
   if (!player) {
     return (
       <div className="glass-panel text-center" style={{ marginTop: '100px' }}>
@@ -56,11 +58,37 @@ const SharedProfileView = ({
       </div>
 
       {/* Endorse Habilidades System for guest actions */}
-      <EndorsementSystem
-        player={player}
-        activeUser={activeUser}
-        onUpdatePlayer={onUpdatePlayer}
-      />
+      <div style={{ padding: '0 16px', marginBottom: '24px' }}>
+        <button 
+          onClick={() => setShowEndorseModal(true)} 
+          className="btn-primary" 
+          style={{ width: '100%', padding: '12px', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', borderRadius: '6px' }}
+        >
+          <Award size={16} />
+          Avalar Habilidades
+        </button>
+      </div>
+
+      {showEndorseModal && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '420px', padding: '24px', position: 'relative', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', background: '#121414' }}>
+            <button 
+              onClick={() => setShowEndorseModal(false)} 
+              style={{ position: 'absolute', right: '16px', top: '16px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+            >
+              <X size={20} />
+            </button>
+            <h3 style={{ fontSize: '20px', marginBottom: '16px', fontFamily: 'var(--font-heading)', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>Avalar Habilidades</h3>
+            <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <EndorsementSystem
+                player={player}
+                activeUser={activeUser}
+                onUpdatePlayer={onUpdatePlayer}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chronological Team history */}
       <div className="glass-panel">

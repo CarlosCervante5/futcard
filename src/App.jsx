@@ -10,6 +10,20 @@ import SharedProfileView from './components/SharedProfileView';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://protective-education-production.up.railway.app';
 
+const getCountryFlag = (country) => {
+  if (!country) return 'https://flagcdn.com/w40/mx.png';
+  const clean = country.trim().toLowerCase();
+  if (clean.includes('mex') || clean.includes('méx')) return 'https://flagcdn.com/w40/mx.png';
+  if (clean.includes('arg')) return 'https://flagcdn.com/w40/ar.png';
+  if (clean.includes('bra')) return 'https://flagcdn.com/w40/br.png';
+  if (clean.includes('esp')) return 'https://flagcdn.com/w40/es.png';
+  if (clean.includes('usa') || clean.includes('est') || clean.includes('uni')) return 'https://flagcdn.com/w40/us.png';
+  if (clean.includes('col')) return 'https://flagcdn.com/w40/co.png';
+  if (clean.includes('uru')) return 'https://flagcdn.com/w40/uy.png';
+  if (clean.includes('chi')) return 'https://flagcdn.com/w40/cl.png';
+  return 'https://flagcdn.com/w40/mx.png'; // default
+};
+
 function App() {
   const [authToken, setAuthToken] = useState(() => sessionStorage.getItem('futcard_jwt') || '');
   const [db, setDb] = useState(getAppData());
@@ -42,6 +56,22 @@ function App() {
     };
   });
   const [sharedPlayerId, setSharedPlayerId] = useState(null);
+  const [endorsePlayerId, setEndorsePlayerId] = useState(null);
+
+  // Onboarding Wizard states
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(1);
+  const [onboardPosition, setOnboardPosition] = useState('DEL');
+  const [onboardClub, setOnboardClub] = useState('');
+  const [onboardNationality, setOnboardNationality] = useState('México');
+  const [onboardPac, setOnboardPac] = useState(75);
+  const [onboardSho, setOnboardSho] = useState(75);
+  const [onboardPas, setOnboardPas] = useState(75);
+  const [onboardDri, setOnboardDri] = useState(75);
+  const [onboardDef, setOnboardDef] = useState(75);
+  const [onboardPhy, setOnboardPhy] = useState(75);
+  const [onboardAvatar, setOnboardAvatar] = useState('');
+  const [onboardTheme, setOnboardTheme] = useState('gold');
 
   // Initialize and check for WhatsApp share params in URL query
   useEffect(() => {
@@ -70,6 +100,34 @@ function App() {
     };
     fetchData();
   }, [authToken]);
+
+  // Onboarding lock interceptor and player auto-mapping
+  useEffect(() => {
+    if (!authToken || !activeUser || !db.players || db.players.length === 0) return;
+
+    if (activeUser.role === 'Jugador' || activeUser.role === 'player') {
+      const existingPlayer = db.players.find(p => p.name.toLowerCase() === activeUser.name.toLowerCase());
+      
+      if (existingPlayer) {
+        // Link the user account to the federative player profile automatically
+        if (activeUser.id !== existingPlayer.id) {
+          const updatedUser = { ...activeUser, id: existingPlayer.id, role: 'player' };
+          setActiveUser(updatedUser);
+          sessionStorage.setItem('futcard_active_admin', JSON.stringify(updatedUser));
+        }
+        // Deactivate onboarding screen
+        if (showOnboarding) {
+          setShowOnboarding(false);
+        }
+      } else {
+        // Force the player onboarding form before showing the home dashboard
+        if (!showOnboarding) {
+          setShowOnboarding(true);
+          setOnboardingStep(1);
+        }
+      }
+    }
+  }, [db.players, activeUser, authToken]);
 
   const handleUpdatePlayer = (updatedPlayer) => {
     const nextPlayers = db.players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p);
@@ -198,6 +256,10 @@ function App() {
           sessionStorage.setItem('futcard_jwt', loginData.token);
           setAuthToken(loginData.token);
           setActiveUser(loginData.user);
+          if (registerRole === 'Jugador') {
+            setShowOnboarding(true);
+            setOnboardingStep(1);
+          }
           setRegisterName('');
           setRegisterEmail('');
           setRegisterNickname('');
@@ -223,6 +285,65 @@ function App() {
       name: 'Santiago Giménez',
       role: 'player',
     });
+  };
+
+  const handleOnboardingSubmit = async () => {
+    const calculatedRating = Math.round((parseInt(onboardPac) + parseInt(onboardSho) + parseInt(onboardPas) + parseInt(onboardDri) + parseInt(onboardDef) + parseInt(onboardPhy)) / 6);
+    const newPlayer = {
+      name: activeUser.name,
+      position: onboardPosition,
+      rating: calculatedRating,
+      club: onboardClub || 'Sin Club',
+      nationality: onboardNationality || 'México',
+      flag: getCountryFlag(onboardNationality),
+      cardTheme: onboardTheme,
+      avatar: onboardAvatar,
+      skills: {
+        pac: { name: "Ritmo", value: parseInt(onboardPac), endorsements: [] },
+        sho: { name: "Tiro", value: parseInt(onboardSho), endorsements: [] },
+        pas: { name: "Pase", value: parseInt(onboardPas), endorsements: [] },
+        dri: { name: "Regate", value: parseInt(onboardDri), endorsements: [] },
+        def: { name: "Defensa", value: parseInt(onboardDef), endorsements: [] },
+        phy: { name: "Físico", value: parseInt(onboardPhy), endorsements: [] }
+      },
+      teams: []
+    };
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/federation/players`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(newPlayer)
+      });
+      if (res.ok) {
+        // Refetch federation data to include the new player
+        const refetchRes = await fetch(`${API_BASE_URL}/api/federation`, {
+          headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (refetchRes.ok) {
+          const data = await refetchRes.json();
+          setDb(data);
+          const newPlayerRecord = data.players.find(p => p.name.toLowerCase() === activeUser.name.toLowerCase());
+          if (newPlayerRecord) {
+            const updatedUser = {
+              ...activeUser,
+              id: newPlayerRecord.id,
+              role: 'player'
+            };
+            setActiveUser(updatedUser);
+            sessionStorage.setItem('futcard_active_admin', JSON.stringify(updatedUser));
+          }
+        }
+        setShowOnboarding(false);
+      } else {
+        alert('Error al registrar perfil deportivo.');
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // Find currently shared player
@@ -317,6 +438,215 @@ function App() {
     );
   }
 
+  if (showOnboarding) {
+    const tempPlayerPreview = {
+      name: activeUser.name,
+      position: onboardPosition,
+      club: onboardClub || 'Tu Club',
+      nationality: onboardNationality || 'México',
+      flag: getCountryFlag(onboardNationality),
+      cardTheme: onboardTheme,
+      avatar: onboardAvatar,
+      skills: {
+        pac: { name: 'Ritmo', value: parseInt(onboardPac) },
+        sho: { name: 'Tiro', value: parseInt(onboardSho) },
+        pas: { name: 'Pase', value: parseInt(onboardPas) },
+        dri: { name: 'Regate', value: parseInt(onboardDri) },
+        def: { name: 'Defensa', value: parseInt(onboardDef) },
+        phy: { name: 'Físico', value: parseInt(onboardPhy) }
+      }
+    };
+
+    const calculatedRating = Math.round((parseInt(onboardPac) + parseInt(onboardSho) + parseInt(onboardPas) + parseInt(onboardDri) + parseInt(onboardDef) + parseInt(onboardPhy)) / 6);
+
+    return (
+      <div className="login-overlay" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', background: '#0c0f0f', overflowY: 'auto' }}>
+        <div style={{ marginBottom: '16px', fontSize: '22px', fontWeight: 'bold', color: '#fff', fontFamily: 'var(--font-heading)', textAlign: 'center' }}>
+          ⚽ Creando tu Perfil de Jugador
+        </div>
+
+        <div className="glass-panel" style={{ width: '100%', maxWidth: '380px', padding: '24px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+          
+          {/* Progress Indicator */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <span style={{ fontSize: '11px', color: 'var(--primary)', fontFamily: 'var(--font-mono)' }}>PASO {onboardingStep} DE 4</span>
+            <div style={{ display: 'flex', gap: '4px', flex: 1, marginLeft: '12px', height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ width: `${(onboardingStep / 4) * 100}%`, height: '100%', background: 'var(--primary)', transition: 'width 0.3s ease' }} />
+            </div>
+          </div>
+
+          {/* STEP 1: Personal Info */}
+          {onboardingStep === 1 && (
+            <div>
+              <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '16px', fontFamily: 'var(--font-heading)' }}>1. Información Básica</h3>
+              
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Posición de Juego</label>
+              <select value={onboardPosition} onChange={e => setOnboardPosition(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '14px', background: '#121414', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}>
+                <option>DEL</option>
+                <option>MCO</option>
+                <option>MC</option>
+                <option>DFC</option>
+                <option>LI</option>
+                <option>LD</option>
+                <option>POR</option>
+              </select>
+
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Nombre de tu Club</label>
+              <input placeholder="Ej. Feyenoord, Cruz Azul, FMF FC" value={onboardClub} onChange={e => setOnboardClub(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '14px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }} />
+
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Nacionalidad</label>
+              <input placeholder="Ej. México" value={onboardNationality} onChange={e => setOnboardNationality(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }} />
+
+              <button onClick={() => setOnboardingStep(2)} className="btn-primary" style={{ width: '100%', padding: '12px' }}>Continuar</button>
+            </div>
+          )}
+
+          {/* STEP 2: Stats Skills Sliders */}
+          {onboardingStep === 2 && (
+            <div>
+              <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '14px', fontFamily: 'var(--font-heading)' }}>2. Estadísticas & Habilidades</h3>
+              
+              {/* Calculated Rating Live Display */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '13px', color: '#fff', fontWeight: 'bold' }}>Media Global</h4>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '10px', color: 'var(--text-muted)' }}>Cálculo automático de tus sliders</p>
+                </div>
+                <div style={{ width: '50px', height: '50px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary) 0%, #10b981 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 15px rgba(195, 244, 0, 0.4)', border: '2px solid #fff' }}>
+                  <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#121414', fontFamily: 'var(--font-heading)' }}>{calculatedRating}</span>
+                </div>
+              </div>
+
+              {[
+                { label: 'Ritmo (RIT)', val: onboardPac, setVal: setOnboardPac },
+                { label: 'Tiro (TIR)', val: onboardSho, setVal: setOnboardSho },
+                { label: 'Pase (PAS)', val: onboardPas, setVal: setOnboardPas },
+                { label: 'Regate (REG)', val: onboardDri, setVal: setOnboardDri },
+                { label: 'Defensa (DEF)', val: onboardDef, setVal: setOnboardDef },
+                { label: 'Físico (FIS)', val: onboardPhy, setVal: setOnboardPhy }
+              ].map((s, idx) => (
+                <div key={idx} style={{ marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                    <span>{s.label}</span>
+                    <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{s.val}</span>
+                  </div>
+                  <input type="range" min="10" max="99" value={s.val} onChange={e => s.setVal(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary)' }} />
+                </div>
+              ))}
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button onClick={() => setOnboardingStep(1)} className="btn-secondary" style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff' }}>Atrás</button>
+                <button onClick={() => setOnboardingStep(3)} className="btn-primary" style={{ flex: 2, padding: '10px' }}>Continuar</button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 3: Avatar Photo URL & Theme selection */}
+          {onboardingStep === 3 && (
+            <div>
+              <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '16px', fontFamily: 'var(--font-heading)' }}>3. Foto & Estilo de Tarjeta</h3>
+
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Foto de tu Ficha</label>
+              
+              {/* Premium Drag & Drop / File Upload Component with preview capability */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: '8px', padding: '18px', marginBottom: '14px', position: 'relative', cursor: 'pointer', textAlign: 'center' }}>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      if (file.size > 2800000) {
+                        alert("La imagen supera el límite de peso de 2MB para evitar saturación de red.");
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setOnboardAvatar(reader.result);
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }} 
+                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', zIndex: 10 }} 
+                />
+                {onboardAvatar ? (
+                  <div style={{ position: 'relative', zIndex: 12 }}>
+                    <img src={onboardAvatar} alt="Foto cargada" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)', boxShadow: '0 0 12px rgba(195, 244, 0, 0.4)', marginBottom: '8px' }} />
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setOnboardAvatar(''); }} 
+                      style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', border: 'none', color: '#fff', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.3)' }}
+                    >
+                      ✕
+                    </button>
+                    <span style={{ fontSize: '11px', color: '#10b981', fontWeight: '500', display: 'block' }}>¡Imagen Cargada!</span>
+                  </div>
+                ) : (
+                  <div style={{ zIndex: 5 }}>
+                    <span style={{ fontSize: '28px', display: 'block', marginBottom: '6px' }}>📸</span>
+                    <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Subir Foto o Tomar Captura</span>
+                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block' }}>Toca para usar tu galería o cámara (Máx 2MB)</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Extra fallback option to manually type the image URL */}
+              <details style={{ marginBottom: '14px', width: '100%' }}>
+                <summary style={{ fontSize: '10px', color: 'var(--text-muted)', cursor: 'pointer', outline: 'none', textAlign: 'left', padding: '2px 0' }}>¿Prefieres ingresar un enlace URL externo?</summary>
+                <input 
+                  placeholder="Ej. https://url-de-tu-foto.com/imagen.png" 
+                  value={onboardAvatar.startsWith('data:') ? '' : onboardAvatar} 
+                  onChange={e => setOnboardAvatar(e.target.value)} 
+                  style={{ width: '100%', padding: '10px', marginTop: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px', fontSize: '11px' }} 
+                />
+              </details>
+
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Diseño de la Tarjeta</label>
+              <select value={onboardTheme} onChange={e => setOnboardTheme(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '20px', background: '#121414', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}>
+                {db.backgrounds && db.backgrounds.filter(b => b.enabled).map(bg => (
+                  <option key={bg.id} value={bg.id}>{bg.name}</option>
+                ))}
+              </select>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <button onClick={() => setOnboardingStep(2)} className="btn-secondary" style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff' }}>Atrás</button>
+                <button onClick={() => setOnboardingStep(4)} className="btn-primary" style={{ flex: 2, padding: '10px' }}>Vista Previa</button>
+              </div>
+            </div>
+          )}
+
+          {/* STEP 4: Live Card Photo Preview */}
+          {onboardingStep === 4 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '16px', fontFamily: 'var(--font-heading)', width: '100%', textAlign: 'left' }}>4. ¡Tu Tarjeta FutCard Pro!</h3>
+              
+              {/* Premium Scale-in Blur Entry Animation Style */}
+              <style>{`
+                @keyframes onboarding-scale-up {
+                  0% { transform: scale(0.6); opacity: 0; filter: blur(8px); }
+                  100% { transform: scale(0.85); opacity: 1; filter: blur(0); }
+                }
+                .onboarding-card-animate {
+                  animation: onboarding-scale-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                  transform-origin: center center;
+                }
+              `}</style>
+
+              <div className="onboarding-card-animate" style={{ margin: '-20px 0 -10px 0' }}>
+                <PlayerCard player={tempPlayerPreview} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '20px', width: '100%' }}>
+                <button onClick={() => setOnboardingStep(3)} className="btn-secondary" style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff' }}>Atrás</button>
+                <button onClick={handleOnboardingSubmit} className="btn-primary" style={{ flex: 2, padding: '10px' }}>Confirmar y Entrar</button>
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       
@@ -399,12 +729,15 @@ function App() {
 
                         <PlayerCard player={p} scale={0.9} />
 
-                        <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
-                          <EndorsementSystem
-                            player={p}
-                            activeUser={activeUser}
-                            onUpdatePlayer={handleUpdatePlayer}
-                          />
+                        <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px', display: 'flex', justifyContent: 'center' }}>
+                          <button 
+                            onClick={() => setEndorsePlayerId(p.id)} 
+                            className="btn-primary" 
+                            style={{ width: '100%', padding: '10px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', borderRadius: '4px' }}
+                          >
+                            <Award size={14} />
+                            Avalar Habilidades
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -605,8 +938,26 @@ function App() {
           </button>
         </nav>
       )}
-
-
+      {endorsePlayerId && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '420px', padding: '24px', position: 'relative', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', background: '#121414' }}>
+            <button 
+              onClick={() => setEndorsePlayerId(null)} 
+              style={{ position: 'absolute', right: '16px', top: '16px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}
+            >
+              <X size={20} />
+            </button>
+            <h3 style={{ fontSize: '20px', marginBottom: '16px', fontFamily: 'var(--font-heading)', color: '#fff', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>Avalar Habilidades</h3>
+            <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <EndorsementSystem
+                player={db.players.find(p => p.id === endorsePlayerId)}
+                activeUser={activeUser}
+                onUpdatePlayer={handleUpdatePlayer}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
