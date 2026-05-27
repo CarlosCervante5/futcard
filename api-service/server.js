@@ -400,7 +400,7 @@ app.get('/api/config/gemini-status', (req, res) => {
   res.json({ active: !!dbData.geminiKey && dbData.geminiKey.trim().length > 0 });
 });
 
-// Live Sandbox diagnostics test (Direct backend-to-Google communication)
+// Live Sandbox diagnostic
 app.post('/api/config/test-gemini', authenticateToken, async (req, res) => {
   const { prompt } = req.body;
   const dbData = readDb();
@@ -422,16 +422,29 @@ app.post('/api/config/test-gemini', authenticateToken, async (req, res) => {
       })
     });
 
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('Gemini API error response:', response.status, errText);
+      return res.status(502).json({ error: 'Error al comunicarse con la API de Gemini.' });
+    }
+
     const data = await response.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    // Clean possible markdown fences
     const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleanText);
+    let parsed;
+    try {
+      parsed = JSON.parse(cleanText);
+    } catch (parseErr) {
+      console.error('Failed to parse Gemini JSON:', parseErr, 'raw:', cleanText);
+      return res.status(500).json({ error: 'Respuesta de Gemini no es un JSON válido.' });
+    }
 
     logAuditAction(req.user.email, `Prueba de sandbox Gemini exitosa para: "${prompt}"`);
-    res.json(parsed);
+    return res.json(parsed);
   } catch (err) {
     console.error('Error in Sandbox Gemini test:', err);
-    res.status(500).json({ error: 'Error de respuesta o API Key incorrecta al consultar Google Gemini.' });
+    return res.status(500).json({ error: 'Error interno al ejecutar la prueba de Gemini.' });
   }
 });
 
