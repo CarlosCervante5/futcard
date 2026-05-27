@@ -484,7 +484,7 @@ async function syncDataToPostgres(data) {
 
     // 8. Sync app_config
     await client.query(
-      "INSERT INTO app_config (key, value) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+      "INSERT INTO app_config (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
       ['geminiKey', data.geminiKey || '']
     );
 

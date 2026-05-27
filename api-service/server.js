@@ -15,6 +15,9 @@ const { readDb, writeDb, DEFAULT_PLAYERS, DEFAULT_DTS, DEFAULT_REFEREES, DEFAULT
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Enable 'trust proxy' so rate limiters can correctly read proxy-forwarded client IPs (e.g. on Railway)
+app.set('trust proxy', 1);
+
 // Resolve JWT secret securely as required by mandatory-secure-web-skills
 let JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
