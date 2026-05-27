@@ -143,80 +143,135 @@ const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
     };
   };
 
-  // ── AI background removal + composite on selected card background ──
+  // ── AI Background Removal: calls Gemini Vision for color hints → canvas removal → composite on bg ──
   const removeBackgroundWithAI = async () => {
     if (!player.avatar) return;
     setIsCroppingAI(true);
     setCropSuccess('');
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 1800));
+      // ── Step 1: Ask Gemini Vision what colors are the background ──
+      let backgroundColors = ['#ffffff', '#f0f0f0'];
+      let threshold = 55;
 
+      try {
+        const analysisResp = await fetch(`${API_BASE_URL}/api/ai/analyze-background`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: player.avatar })
+        });
+        if (analysisResp.ok) {
+          const analysis = await analysisResp.json();
+          if (analysis.backgroundColors?.length) backgroundColors = analysis.backgroundColors;
+          if (analysis.threshold) threshold = analysis.threshold;
+        }
+      } catch (e) {
+        console.warn('[AI BG] Could not reach analyze-background endpoint, using corner fallback:', e);
+      }
+
+      // Helper: hex → {r,g,b}
+      const hexToRgb = (hex) => {
+        const clean = hex.replace('#', '');
+        return {
+          r: parseInt(clean.substring(0, 2), 16),
+          g: parseInt(clean.substring(2, 4), 16),
+          b: parseInt(clean.substring(4, 6), 16)
+        };
+      };
+
+      const targetColors = backgroundColors.map(hexToRgb);
+
+      // ── Step 2: Canvas background removal using Gemini-guided palette ──
       const activeBg = allBackgrounds.find(bg => bg.id === player.cardTheme);
 
-      const composited = await new Promise((resolve, reject) => {
+      const processedDataUrl = await new Promise((resolve, reject) => {
         const img = new Image();
-        img.src = player.avatar;
         img.onload = () => {
-          // Step 1: remove background
-          const tempCanvas = document.createElement('canvas');
-          tempCanvas.width = img.width;
-          tempCanvas.height = img.height;
-          const tempCtx = tempCanvas.getContext('2d');
-          tempCtx.drawImage(img, 0, 0);
+          const SIZE = img.width;
+          const canvas = document.createElement('canvas');
+          canvas.width = SIZE;
+          canvas.height = SIZE;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
 
-          const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+          const imgData = ctx.getImageData(0, 0, SIZE, SIZE);
           const d = imgData.data;
-          // Sample corner colors for background detection
-          const rC = d[0], gC = d[1], bC = d[2];
-          const threshold = 60;
-          for (let i = 0; i < d.length; i += 4) {
-            const dr = d[i] - rC, dg = d[i+1] - gC, db = d[i+2] - bC;
-            const dist = Math.sqrt(dr*dr + dg*dg + db*db);
-            const isNearWhite = d[i] > 228 && d[i+1] > 228 && d[i+2] > 228;
-            if (dist < threshold || isNearWhite) d[i+3] = 0;
-          }
-          tempCtx.putImageData(imgData, 0, 0);
-          const cutout = tempCanvas.toDataURL('image/png');
 
-          // Step 2: composite on background (if image bg available)
-          if (activeBg && activeBg.image) {
+          // Also sample corners as extra background color hints
+          const cornerColors = [
+            { r: d[0], g: d[1], b: d[2] }, // top-left
+            { r: d[(SIZE - 1) * 4], g: d[(SIZE - 1) * 4 + 1], b: d[(SIZE - 1) * 4 + 2] }, // top-right
+            { r: d[(SIZE * (SIZE - 1)) * 4], g: d[(SIZE * (SIZE - 1)) * 4 + 1], b: d[(SIZE * (SIZE - 1)) * 4 + 2] }, // bottom-left
+            { r: d[(SIZE * SIZE - 1) * 4], g: d[(SIZE * SIZE - 1) * 4 + 1], b: d[(SIZE * SIZE - 1) * 4 + 2] }, // bottom-right
+          ];
+          const allTargets = [...targetColors, ...cornerColors];
+
+          const colorDist = (r1, g1, b1, r2, g2, b2) =>
+            Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
+
+          for (let i = 0; i < d.length; i += 4) {
+            const pr = d[i], pg = d[i + 1], pb = d[i + 2];
+            const minDist = Math.min(...allTargets.map(c => colorDist(pr, pg, pb, c.r, c.g, c.b)));
+
+            if (minDist < threshold) {
+              // Fully transparent
+              d[i + 3] = 0;
+            } else if (minDist < threshold + 20) {
+              // Feathered edge: partial transparency for smooth border
+              d[i + 3] = Math.round(((minDist - threshold) / 20) * 255);
+            }
+            // else: keep pixel fully opaque
+          }
+
+          ctx.putImageData(imgData, 0, 0);
+          const cutout = canvas.toDataURL('image/png');
+
+          // ── Step 3: Composite cutout on selected card background ──
+          if (activeBg?.image) {
             const bgImg = new Image();
             bgImg.onload = () => {
               const outCanvas = document.createElement('canvas');
-              const SIZE = 400;
-              outCanvas.width = SIZE;
-              outCanvas.height = SIZE;
+              const OUT_SIZE = 400;
+              outCanvas.width = OUT_SIZE;
+              outCanvas.height = OUT_SIZE;
               const outCtx = outCanvas.getContext('2d');
-              // Draw bg cropped to square
-              outCtx.drawImage(bgImg, 0, 0, SIZE, SIZE);
-              // Draw cutout centered slightly up (portrait framing)
+
+              // Draw background filling the square
+              outCtx.drawImage(bgImg, 0, 0, OUT_SIZE, OUT_SIZE);
+
+              // Draw player cutout centered and slightly up (head/shoulders framing)
               const cutoutImg = new Image();
               cutoutImg.onload = () => {
-                outCtx.drawImage(cutoutImg, 0, 0, SIZE, SIZE);
+                // Scale to fill 90% of frame, vertically shifted up slightly
+                const scale = OUT_SIZE / cutoutImg.width;
+                const drawW = cutoutImg.width * scale;
+                const drawH = cutoutImg.height * scale;
+                const drawX = (OUT_SIZE - drawW) / 2;
+                const drawY = (OUT_SIZE - drawH) / 2 - OUT_SIZE * 0.05;
+                outCtx.drawImage(cutoutImg, drawX, drawY, drawW, drawH);
                 resolve(outCanvas.toDataURL('image/jpeg', 0.88));
               };
-              cutoutImg.onerror = reject;
+              cutoutImg.onerror = () => resolve(cutout);
               cutoutImg.src = cutout;
             };
-            bgImg.onerror = () => resolve(cutout); // fallback: just the cutout
+            bgImg.onerror = () => resolve(cutout);
             bgImg.src = activeBg.image;
           } else {
-            // No bg image → just save the cutout
             resolve(cutout);
           }
         };
         img.onerror = reject;
+        img.src = player.avatar;
       });
 
-      onUpdatePlayer({ ...player, avatar: composited });
-      setCropSuccess('✨ ¡Silueta recortada y montada en el fondo de la tarjeta con éxito!');
+      onUpdatePlayer({ ...player, avatar: processedDataUrl });
+      setCropSuccess('✨ Fondo eliminado con IA Gemini y composición aplicada sobre el fondo de tarjeta.');
     } catch (err) {
-      console.error('Error cropping image:', err);
-      setCropSuccess('⚠️ Error al recortar la silueta del jugador.');
+      console.error('[AI BG Removal]', err);
+      setCropSuccess('⚠️ Error al procesar la imagen. Intenta de nuevo.');
     } finally {
       setIsCroppingAI(false);
-      setTimeout(() => setCropSuccess(''), 4500);
+      setTimeout(() => setCropSuccess(''), 5000);
     }
   };
 

@@ -34,8 +34,8 @@ if (!JWT_SECRET) {
 // Security Configuration
 app.use(helmet());
 
-// Express JSON limit set to 5MB to accommodate base64 background visual assets safely
-app.use(express.json({ limit: '5mb' }));
+// Express JSON limit set to 10MB to accommodate base64 photo uploads for AI processing
+app.use(express.json({ limit: '10mb' }));
 
 // Restrict CORS origins strictly to local and configured production frontends
 const allowedOrigins = [
@@ -465,6 +465,70 @@ app.get('/api/config/list-gemini-models', authenticateToken, async (req, res) =>
     return res.json({ models: names });
   } catch (err) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// AI Background Analysis: uses Gemini Vision to detect background colors in the player photo
+// Client uses the returned colors to do accurate multi-color canvas removal
+app.post('/api/ai/analyze-background', async (req, res) => {
+  const { image } = req.body; // base64 data URL
+  if (!image) return res.status(400).json({ error: 'No se proporcionó imagen.' });
+
+  const dbData = readDb();
+  const apiKey = dbData.geminiKey;
+
+  // No API key: return sensible defaults (client will use corner-color fallback)
+  if (!apiKey || apiKey.trim().length === 0) {
+    return res.json({ backgroundColors: ['#ffffff', '#f0f0f0', '#e8e8e8'], threshold: 55, usingFallback: true });
+  }
+
+  // Strip data-URL prefix, keep raw base64
+  const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              {
+                inlineData: {
+                  mimeType: 'image/jpeg',
+                  data: base64Data
+                }
+              },
+              {
+                text: 'Analiza esta foto de un jugador de fútbol. Identifica los colores del FONDO (pared, habitación, cielo, cancha, etc. — NO el jugador). Devuelve ÚNICAMENTE un JSON sin markdown con esta estructura exacta: {"backgroundColors":["#hexcolor1","#hexcolor2","#hexcolor3"],"threshold":55}. backgroundColors son entre 2 y 5 colores hex del fondo. threshold es un número entre 30 y 80 según la homogeneidad del fondo (30=muy heterogéneo, 80=muy uniforme).'
+              }
+            ]
+          }]
+        })
+      }
+    );
+
+    if (!response.ok) {
+      // Gemini error → return safe defaults
+      return res.json({ backgroundColors: ['#ffffff', '#f0f0f0'], threshold: 50, usingFallback: true });
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+    let parsed;
+    try {
+      parsed = JSON.parse(cleanText);
+    } catch {
+      return res.json({ backgroundColors: ['#ffffff', '#f0f0f0'], threshold: 50, usingFallback: true });
+    }
+
+    return res.json(parsed);
+  } catch (err) {
+    console.error('[analyze-background] Error:', err.message);
+    return res.json({ backgroundColors: ['#ffffff', '#f0f0f0'], threshold: 50, usingFallback: true });
   }
 });
 
