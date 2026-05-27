@@ -653,12 +653,12 @@ function App() {
     const calculatedRating = Math.round((parseInt(onboardPac) + parseInt(onboardSho) + parseInt(onboardPas) + parseInt(onboardDri) + parseInt(onboardDef) + parseInt(onboardPhy)) / 6);
 
     return (
-      <div className="login-overlay" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px', background: '#0c0f0f', overflowY: 'auto' }}>
-        <div style={{ marginBottom: '16px', fontSize: '22px', fontWeight: 'bold', color: '#fff', fontFamily: 'var(--font-heading)', textAlign: 'center' }}>
+      <div className="login-overlay" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', minHeight: '100vh', padding: 'max(45px, env(safe-area-inset-top) + 10px) 12px max(30px, env(safe-area-inset-bottom) + 10px) 12px', background: '#0c0f0f', overflowY: 'auto' }}>
+        <div style={{ marginBottom: '16px', fontSize: '22px', fontWeight: 'bold', color: '#fff', fontFamily: 'var(--font-heading)', textAlign: 'center', width: '100%' }}>
           ⚽ Creando tu Perfil de Jugador
         </div>
 
-        <div className="glass-panel" style={{ width: '100%', maxWidth: '380px', padding: '24px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+        <div className="glass-panel" style={{ width: '100%', maxWidth: '390px', padding: '20px 16px', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
           
           {/* Progress Indicator */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -740,12 +740,12 @@ function App() {
               <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '16px', fontFamily: 'var(--font-heading)' }}>3. Foto & Estilo de Tarjeta</h3>
 
               {rawUploadedImage ? (
-                /* Custom shape crop editor */
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', borderRadius: '8px', marginBottom: '14px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#fff', fontWeight: 'bold', width: '100%', textAlign: 'left' }}>Ajustar Encuadre de tu Foto</h4>
+                /* Custom shape crop editor (Hides the rest of step 3 to save space) */
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '14px' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#fff', fontWeight: 'bold', width: '100%', textAlign: 'left', fontFamily: 'var(--font-heading)' }}>Ajustar Encuadre de tu Foto</h4>
                   
-                  {/* Interactive Mask Frame with Silhouette overlay */}
-                  <div style={{ width: '200px', height: '200px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: '#121414', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8)' }}>
+                  {/* Interactive Mask Frame with Silhouette overlay (increased size to 250px) */}
+                  <div style={{ width: '250px', height: '250px', borderRadius: '12px', border: '2px solid var(--primary)', background: '#121414', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(195, 244, 0, 0.2)', marginBottom: '12px' }}>
                     
                     {/* Raw image applying CSS transforms */}
                     <img 
@@ -770,12 +770,12 @@ function App() {
                     </svg>
                   </div>
                   
-                  <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '8px 0 16px 0', textAlign: 'center' }}>
-                    Usa los controles de abajo para encuadrar tu rostro y hombros dentro del contorno neón.
+                  <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '0 0 14px 0', textAlign: 'center' }}>
+                    Ajusta tu rostro y hombros dentro del contorno neón usando los controles inferiores:
                   </p>
 
                   {/* Scale/Zoom Control */}
-                  <div style={{ width: '100%', marginBottom: '10px' }}>
+                  <div style={{ width: '100%', marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
                       <span>Zoom (Ajustar Tamaño)</span>
                       <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{Math.round(cropZoom * 100)}%</span>
@@ -784,7 +784,7 @@ function App() {
                   </div>
 
                   {/* Move Horizontal Control */}
-                  <div style={{ width: '100%', marginBottom: '10px' }}>
+                  <div style={{ width: '100%', marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
                       <span>Mover Horizontal</span>
                       <span style={{ color: 'var(--primary)' }}>{cropOffsetX}px</span>
@@ -793,7 +793,7 @@ function App() {
                   </div>
 
                   {/* Move Vertical Control */}
-                  <div style={{ width: '100%', marginBottom: '16px' }}>
+                  <div style={{ width: '100%', marginBottom: '14px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
                       <span>Mover Vertical</span>
                       <span style={{ color: 'var(--primary)' }}>{cropOffsetY}px</span>
@@ -820,12 +820,12 @@ function App() {
                   </div>
                 </div>
               ) : isCameraActive ? (
-                /* Live Camera Feed inside the App with Silhouette Overlay */
-                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', borderRadius: '8px', marginBottom: '14px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#fff', fontWeight: 'bold', width: '100%', textAlign: 'left' }}>Encuadra tu Foto de Hombros Para Arriba</h4>
+                /* Live Camera Feed inside the App with Silhouette Overlay (Hides rest of Step 3) */
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '14px' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#fff', fontWeight: 'bold', width: '100%', textAlign: 'left', fontFamily: 'var(--font-heading)' }}>Encuadra tu Foto</h4>
                   
-                  {/* Video viewport with neon contour guide overlay */}
-                  <div style={{ width: '200px', height: '200px', borderRadius: '8px', border: '2px solid var(--primary)', background: '#000', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(195, 244, 0, 0.3)', marginBottom: '12px' }}>
+                  {/* Video viewport with neon contour guide overlay (increased size to 250px) */}
+                  <div style={{ width: '250px', height: '250px', borderRadius: '12px', border: '2px solid var(--primary)', background: '#000', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(195, 244, 0, 0.3)', marginBottom: '12px' }}>
                     
                     {/* Live HTML5 video element */}
                     <video 
@@ -873,7 +873,7 @@ function App() {
                   </div>
                 </div>
               ) : (
-                /* Normal Upload Dropzone / Choice Panel */
+                /* Normal Upload Choice Panel (Only visible when neither camera nor cropper is active) */
                 <>
                   <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Foto de tu Ficha</label>
                   
@@ -975,29 +975,29 @@ function App() {
                       style={{ width: '100%', padding: '10px', marginTop: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px', fontSize: '11px' }} 
                     />
                   </details>
+
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Diseño de la Tarjeta</label>
+                  <select value={onboardTheme} onChange={e => setOnboardTheme(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '20px', background: '#121414', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}>
+                    {db.backgrounds && db.backgrounds.length > 0 ? (
+                      db.backgrounds.filter(b => b.enabled).map(bg => (
+                        <option key={bg.id} value={bg.id}>{bg.name}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="gold">🏆 Oro Clásico</option>
+                        <option value="totw">⚡ Equipo de la Semana (TOTW)</option>
+                        <option value="future">🌌 Futura Promesa Neon</option>
+                        <option value="icon">🎖️ Icono Leyenda Blanca</option>
+                      </>
+                    )}
+                  </select>
+
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                    <button onClick={() => setOnboardingStep(2)} className="btn-secondary" style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff' }}>Atrás</button>
+                    <button onClick={() => setOnboardingStep(4)} className="btn-primary" style={{ flex: 2, padding: '10px' }}>Vista Previa</button>
+                  </div>
                 </>
               )}
-
-              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Diseño de la Tarjeta</label>
-              <select value={onboardTheme} onChange={e => setOnboardTheme(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '20px', background: '#121414', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}>
-                {db.backgrounds && db.backgrounds.length > 0 ? (
-                  db.backgrounds.filter(b => b.enabled).map(bg => (
-                    <option key={bg.id} value={bg.id}>{bg.name}</option>
-                  ))
-                ) : (
-                  <>
-                    <option value="gold">🏆 Oro Clásico</option>
-                    <option value="totw">⚡ Equipo de la Semana (TOTW)</option>
-                    <option value="future">🌌 Futura Promesa Neon</option>
-                    <option value="icon">🎖️ Icono Leyenda Blanca</option>
-                  </>
-                )}
-              </select>
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                <button onClick={() => setOnboardingStep(2)} className="btn-secondary" style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff' }}>Atrás</button>
-                <button onClick={() => setOnboardingStep(4)} className="btn-primary" style={{ flex: 2, padding: '10px' }}>Vista Previa</button>
-              </div>
             </div>
           )}
 
