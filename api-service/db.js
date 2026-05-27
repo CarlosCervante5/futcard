@@ -237,8 +237,12 @@ async function initPostgresDb() {
         name VARCHAR(100),
         email VARCHAR(100) UNIQUE,
         password VARCHAR(100),
-        role VARCHAR(50)
+        role VARCHAR(50),
+        nickname VARCHAR(100)
       )
+    `);
+    await client.query(`
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS nickname VARCHAR(100);
     `);
 
     // 6. Backgrounds Table
@@ -455,8 +459,8 @@ async function syncDataToPostgres(data) {
     await client.query('TRUNCATE TABLE admins');
     for (const a of data.admins) {
       await client.query(
-        'INSERT INTO admins (id, name, email, password, role) VALUES ($1, $2, $3, $4, $5)',
-        [a.id, a.name, a.email, a.password, a.role]
+        'INSERT INTO admins (id, name, email, password, role, nickname) VALUES ($1, $2, $3, $4, $5, $6)',
+        [a.id, a.name, a.email, a.password, a.role, a.nickname || '']
       );
     }
 

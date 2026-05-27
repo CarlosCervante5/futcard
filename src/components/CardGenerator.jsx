@@ -2,20 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Sparkles, Download, RefreshCw, Star, Compass } from 'lucide-react';
 import PlayerCard from './PlayerCard';
 
-let API_BASE_URL = import.meta.env.VITE_API_URL;
-if (!API_BASE_URL) {
-  if (typeof window !== 'undefined' && (
-    window.location.hostname.includes('railway.app') ||
-    window.Capacitor ||
-    window.location.protocol === 'capacitor:' ||
-    window.location.protocol === 'http-capacitor:' ||
-    window.location.hostname === 'localhost' && window.location.port === '' // native packaged webview
-  )) {
-    API_BASE_URL = 'https://protective-education-production.up.railway.app';
-  } else {
-    API_BASE_URL = 'http://localhost:5000';
-  }
-}
+let API_BASE_URL = import.meta.env.VITE_API_URL || 'https://protective-education-production.up.railway.app';
 
 const CardGenerator = ({ player, onUpdatePlayer, embedded = false }) => {
   const [isCroppingAI, setIsCroppingAI] = useState(false);

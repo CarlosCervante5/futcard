@@ -17,14 +17,7 @@ const MOCK_DB_KEYS = {
   backgrounds: 'futcard_all_backgrounds'
 };
 
-let API_BASE_URL = import.meta.env.VITE_API_URL;
-if (!API_BASE_URL) {
-  if (typeof window !== 'undefined' && window.location.hostname.includes('railway.app')) {
-    API_BASE_URL = 'https://protective-education-production.up.railway.app';
-  } else {
-    API_BASE_URL = 'http://localhost:5000';
-  }
-}
+let API_BASE_URL = import.meta.env.VITE_API_URL || 'https://protective-education-production.up.railway.app';
 
 function App() {
   const [db, setDb] = useState({ players: [], dts: [], referees: [], leagues: [] });
