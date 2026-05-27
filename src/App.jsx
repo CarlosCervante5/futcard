@@ -73,6 +73,12 @@ function App() {
   const [onboardAvatar, setOnboardAvatar] = useState('');
   const [onboardTheme, setOnboardTheme] = useState('gold');
 
+  // Onboarding Avatar custom photo shape cropper states
+  const [rawUploadedImage, setRawUploadedImage] = useState(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropOffsetX, setCropOffsetX] = useState(0);
+  const [cropOffsetY, setCropOffsetY] = useState(0);
+
   // Initialize and check for WhatsApp share params in URL query
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -285,6 +291,43 @@ function App() {
       name: 'Santiago Giménez',
       role: 'player',
     });
+  };
+
+  const handleCropApply = () => {
+    if (!rawUploadedImage) return;
+    const img = new Image();
+    img.src = rawUploadedImage;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 300;
+      canvas.height = 300;
+      const ctx = canvas.getContext('2d');
+
+      // Clear with transparent background
+      ctx.clearRect(0, 0, 300, 300);
+
+      const cropBoxSize = 200;
+      const destSize = 300;
+      const ratio = destSize / cropBoxSize; // 1.5x multiplier
+
+      const w = img.width;
+      const h = img.height;
+      const minSide = Math.min(w, h);
+      const scaleFactor = (cropBoxSize / minSide) * cropZoom;
+      const drawW = w * scaleFactor * ratio;
+      const drawH = h * scaleFactor * ratio;
+
+      const drawX = (destSize - drawW) / 2 + cropOffsetX * ratio;
+      const drawY = (destSize - drawH) / 2 + cropOffsetY * ratio;
+
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+
+      setOnboardAvatar(canvas.toDataURL('image/png'));
+      setRawUploadedImage(null); // Close crop editor
+      setCropZoom(1); // Reset
+      setCropOffsetX(0);
+      setCropOffsetY(0);
+    };
   };
 
   const handleOnboardingSubmit = async () => {
@@ -546,59 +589,147 @@ function App() {
             <div>
               <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '16px', fontFamily: 'var(--font-heading)' }}>3. Foto & Estilo de Tarjeta</h3>
 
-              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Foto de tu Ficha</label>
-              
-              {/* Premium Drag & Drop / File Upload Component with preview capability */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: '8px', padding: '18px', marginBottom: '14px', position: 'relative', cursor: 'pointer', textAlign: 'center' }}>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      if (file.size > 2800000) {
-                        alert("La imagen supera el límite de peso de 2MB para evitar saturación de red.");
-                        return;
-                      }
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setOnboardAvatar(reader.result);
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }} 
-                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', zIndex: 10 }} 
-                />
-                {onboardAvatar ? (
-                  <div style={{ position: 'relative', zIndex: 12 }}>
-                    <img src={onboardAvatar} alt="Foto cargada" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)', boxShadow: '0 0 12px rgba(195, 244, 0, 0.4)', marginBottom: '8px' }} />
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); setOnboardAvatar(''); }} 
-                      style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', border: 'none', color: '#fff', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.3)' }}
-                    >
-                      ✕
-                    </button>
-                    <span style={{ fontSize: '11px', color: '#10b981', fontWeight: '500', display: 'block' }}>¡Imagen Cargada!</span>
+              {rawUploadedImage ? (
+                /* Custom shape crop editor */
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', borderRadius: '8px', marginBottom: '14px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#fff', fontWeight: 'bold', width: '100%', textAlign: 'left' }}>Ajustar Encuadre de tu Foto</h4>
+                  
+                  {/* Interactive Mask Frame with Silhouette overlay */}
+                  <div style={{ width: '200px', height: '200px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.15)', background: '#121414', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.8)' }}>
+                    
+                    {/* Raw image applying CSS transforms */}
+                    <img 
+                      src={rawUploadedImage} 
+                      alt="En edición" 
+                      style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        objectFit: 'cover', 
+                        pointerEvents: 'none', 
+                        transform: `translate(${cropOffsetX}px, ${cropOffsetY}px) scale(${cropZoom})`, 
+                        transition: 'transform 0.1s ease-out' 
+                      }} 
+                    />
+                    
+                    {/* Silhouette shape overlay guide (head and shoulders contour) */}
+                    <svg viewBox="0 0 100 100" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}>
+                      {/* Semi-transparent overlay outside the outline */}
+                      <path d="M0,0 H100 V100 H0 Z M50,15 C41.7,15 35,21.7 35,30 C35,38.3 41.7,45 50,45 C58.3,45 65,38.3 65,30 C65,21.7 58.3,15 50,15 Z M15,85 C15,69.5 27.5,57 43,55.5 C43.5,55.4 44,55 44,54.5 V48 C42,47 41,45 41,42 C41,40 42,39 42,39 C42,39 43,35 43,32 H57 C57,35 58,39 58,39 C58,39 59,40 59,42 C59,45 58,47 56,48 V54.5 C56,55 56.5,55.4 57,55.5 C72.5,57 85,69.5 85,85 Z" fill="rgba(12,15,15,0.7)" fillRule="evenodd" />
+                      {/* Glowing neon outline border */}
+                      <path d="M50,15 C41.7,15 35,21.7 35,30 C35,38.3 41.7,45 50,45 C58.3,45 65,38.3 65,30 C65,21.7 58.3,15 50,15 Z M15,85 C15,69.5 27.5,57 43,55.5 C43.5,55.4 44,55 44,54.5 V48 C42,47 41,45 41,42 C41,40 42,39 42,39 C42,39 43,35 43,32 H57 C57,35 58,39 58,39 C58,39 59,40 59,42 C59,45 58,47 56,48 V54.5 C56,55 56.5,55.4 57,55.5 C72.5,57 85,69.5 85,85 Z" stroke="var(--primary)" strokeWidth="1.5" stroke-dasharray="3,3" fill="none" style={{ filter: 'drop-shadow(0 0 5px var(--primary))' }} />
+                    </svg>
                   </div>
-                ) : (
-                  <div style={{ zIndex: 5 }}>
-                    <span style={{ fontSize: '28px', display: 'block', marginBottom: '6px' }}>📸</span>
-                    <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Subir Foto o Tomar Captura</span>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block' }}>Toca para usar tu galería o cámara (Máx 2MB)</span>
-                  </div>
-                )}
-              </div>
+                  
+                  <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '8px 0 16px 0', textAlign: 'center' }}>
+                    Usa los controles de abajo para encuadrar tu rostro y hombros dentro del contorno neón.
+                  </p>
 
-              {/* Extra fallback option to manually type the image URL */}
-              <details style={{ marginBottom: '14px', width: '100%' }}>
-                <summary style={{ fontSize: '10px', color: 'var(--text-muted)', cursor: 'pointer', outline: 'none', textAlign: 'left', padding: '2px 0' }}>¿Prefieres ingresar un enlace URL externo?</summary>
-                <input 
-                  placeholder="Ej. https://url-de-tu-foto.com/imagen.png" 
-                  value={onboardAvatar.startsWith('data:') ? '' : onboardAvatar} 
-                  onChange={e => setOnboardAvatar(e.target.value)} 
-                  style={{ width: '100%', padding: '10px', marginTop: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px', fontSize: '11px' }} 
-                />
-              </details>
+                  {/* Scale/Zoom Control */}
+                  <div style={{ width: '100%', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      <span>Zoom (Ajustar Tamaño)</span>
+                      <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>{Math.round(cropZoom * 100)}%</span>
+                    </div>
+                    <input type="range" min="0.5" max="3.0" step="0.1" value={cropZoom} onChange={e => setCropZoom(parseFloat(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary)' }} />
+                  </div>
+
+                  {/* Move Horizontal Control */}
+                  <div style={{ width: '100%', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      <span>Mover Horizontal</span>
+                      <span style={{ color: 'var(--primary)' }}>{cropOffsetX}px</span>
+                    </div>
+                    <input type="range" min="-120" max="120" value={cropOffsetX} onChange={e => setCropOffsetX(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary)' }} />
+                  </div>
+
+                  {/* Move Vertical Control */}
+                  <div style={{ width: '100%', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      <span>Mover Vertical</span>
+                      <span style={{ color: 'var(--primary)' }}>{cropOffsetY}px</span>
+                    </div>
+                    <input type="range" min="-120" max="120" value={cropOffsetY} onChange={e => setCropOffsetY(parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--primary)' }} />
+                  </div>
+
+                  {/* Button Actions */}
+                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                    <button 
+                      onClick={() => setRawUploadedImage(null)} 
+                      className="btn-secondary" 
+                      style={{ flex: 1, padding: '10px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff' }}
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      onClick={handleCropApply} 
+                      className="btn-primary" 
+                      style={{ flex: 2, padding: '10px', fontSize: '12px', fontWeight: 'bold' }}
+                    >
+                      ✂️ Guardar Recorte
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Normal Upload Dropzone */
+                <>
+                  <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Foto de tu Ficha</label>
+                  
+                  {/* Premium Drag & Drop / File Upload Component with preview capability */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: '8px', padding: '18px', marginBottom: '14px', position: 'relative', cursor: 'pointer', textAlign: 'center' }}>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          if (file.size > 2800000) {
+                            alert("La imagen supera el límite de peso de 2MB para evitar saturación de red.");
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setRawUploadedImage(reader.result);
+                            setCropZoom(1);
+                            setCropOffsetX(0);
+                            setCropOffsetY(0);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }} 
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', zIndex: 10 }} 
+                    />
+                    {onboardAvatar ? (
+                      <div style={{ position: 'relative', zIndex: 12 }}>
+                        <img src={onboardAvatar} alt="Foto cargada" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)', boxShadow: '0 0 12px rgba(195, 244, 0, 0.4)', marginBottom: '8px' }} />
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setOnboardAvatar(''); }} 
+                          style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', border: 'none', color: '#fff', borderRadius: '50%', width: '22px', height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', cursor: 'pointer', boxShadow: '0 2px 5px rgba(0,0,0,0.3)' }}
+                        >
+                          ✕
+                        </button>
+                        <span style={{ fontSize: '11px', color: '#10b981', fontWeight: '500', display: 'block' }}>¡Imagen Cargada!</span>
+                      </div>
+                    ) : (
+                      <div style={{ zIndex: 5 }}>
+                        <span style={{ fontSize: '28px', display: 'block', marginBottom: '6px' }}>📸</span>
+                        <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Subir Foto o Tomar Captura</span>
+                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block' }}>Toca para usar tu galería o cámara (Máx 2MB)</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Extra fallback option to manually type the image URL */}
+                  <details style={{ marginBottom: '14px', width: '100%' }}>
+                    <summary style={{ fontSize: '10px', color: 'var(--text-muted)', cursor: 'pointer', outline: 'none', textAlign: 'left', padding: '2px 0' }}>¿Prefieres ingresar un enlace URL externo?</summary>
+                    <input 
+                      placeholder="Ej. https://url-de-tu-foto.com/imagen.png" 
+                      value={onboardAvatar.startsWith('data:') ? '' : onboardAvatar} 
+                      onChange={e => setOnboardAvatar(e.target.value)} 
+                      style={{ width: '100%', padding: '10px', marginTop: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px', fontSize: '11px' }} 
+                    />
+                  </details>
+                </>
+              )}
 
               <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Diseño de la Tarjeta</label>
               <select value={onboardTheme} onChange={e => setOnboardTheme(e.target.value)} style={{ width: '100%', padding: '10px', marginBottom: '20px', background: '#121414', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}>
