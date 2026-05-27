@@ -78,6 +78,7 @@ function App() {
   const [cropZoom, setCropZoom] = useState(1);
   const [cropOffsetX, setCropOffsetX] = useState(0);
   const [cropOffsetY, setCropOffsetY] = useState(0);
+  const [isAIProcessing, setIsAIProcessing] = useState(false);
 
   // Live camera stream states and handlers
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -440,41 +441,112 @@ function App() {
     });
   };
 
-  const handleCropApply = () => {
+  const handleCropApply = async () => {
     if (!rawUploadedImage) return;
-    const img = new Image();
-    img.src = rawUploadedImage;
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 300;
-      canvas.height = 300;
-      const ctx = canvas.getContext('2d');
 
-      // Clear with transparent background
-      ctx.clearRect(0, 0, 300, 300);
+    // Step 1: Render the cropped image from the editor onto a canvas
+    const croppedBase64 = await new Promise((resolve) => {
+      const img = new Image();
+      img.src = rawUploadedImage;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 300;
+        canvas.height = 300;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, 300, 300);
+        const cropBoxSize = 200;
+        const destSize = 300;
+        const ratio = destSize / cropBoxSize;
+        const minSide = Math.min(img.width, img.height);
+        const scaleFactor = (cropBoxSize / minSide) * cropZoom;
+        const drawW = img.width * scaleFactor * ratio;
+        const drawH = img.height * scaleFactor * ratio;
+        const drawX = (destSize - drawW) / 2 + cropOffsetX * ratio;
+        const drawY = (destSize - drawH) / 2 + cropOffsetY * ratio;
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+    });
 
-      const cropBoxSize = 200;
-      const destSize = 300;
-      const ratio = destSize / cropBoxSize; // 1.5x multiplier
+    // Close crop editor immediately so user sees the loading screen
+    setRawUploadedImage(null);
+    setCropZoom(1);
+    setCropOffsetX(0);
+    setCropOffsetY(0);
+    setIsAIProcessing(true);
 
-      const w = img.width;
-      const h = img.height;
-      const minSide = Math.min(w, h);
-      const scaleFactor = (cropBoxSize / minSide) * cropZoom;
-      const drawW = w * scaleFactor * ratio;
-      const drawH = h * scaleFactor * ratio;
+    // Step 2: Send cropped image to Gemini Vision for background color analysis
+    try {
+      let backgroundColors = ['#ffffff', '#f0f0f0', '#e8e8e8'];
+      let threshold = 55;
 
-      const drawX = (destSize - drawW) / 2 + cropOffsetX * ratio;
-      const drawY = (destSize - drawH) / 2 + cropOffsetY * ratio;
+      try {
+        const analysisResp = await fetch(`${API_BASE_URL}/api/ai/analyze-background`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: croppedBase64 })
+        });
+        if (analysisResp.ok) {
+          const analysis = await analysisResp.json();
+          if (analysis.backgroundColors?.length) backgroundColors = analysis.backgroundColors;
+          if (analysis.threshold) threshold = analysis.threshold;
+        }
+      } catch (e) {
+        console.warn('[Onboard AI BG] Could not reach endpoint, using fallback colors:', e);
+      }
 
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      // Step 3: Multi-color canvas background removal guided by Gemini palette
+      const hexToRgb = (hex) => {
+        const clean = hex.replace('#', '');
+        return { r: parseInt(clean.substring(0,2),16), g: parseInt(clean.substring(2,4),16), b: parseInt(clean.substring(4,6),16) };
+      };
+      const targetColors = backgroundColors.map(hexToRgb);
 
-      setOnboardAvatar(canvas.toDataURL('image/jpeg', 0.85));
-      setRawUploadedImage(null); // Close crop editor
-      setCropZoom(1); // Reset
-      setCropOffsetX(0);
-      setCropOffsetY(0);
-    };
+      const finalAvatar = await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const SIZE = img.width;
+          const canvas = document.createElement('canvas');
+          canvas.width = SIZE; canvas.height = SIZE;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+
+          const imgData = ctx.getImageData(0, 0, SIZE, SIZE);
+          const d = imgData.data;
+
+          // Corner colors as extra background hints
+          const corners = [
+            { r: d[0], g: d[1], b: d[2] },
+            { r: d[(SIZE-1)*4], g: d[(SIZE-1)*4+1], b: d[(SIZE-1)*4+2] },
+            { r: d[SIZE*(SIZE-1)*4], g: d[SIZE*(SIZE-1)*4+1], b: d[SIZE*(SIZE-1)*4+2] },
+            { r: d[(SIZE*SIZE-1)*4], g: d[(SIZE*SIZE-1)*4+1], b: d[(SIZE*SIZE-1)*4+2] }
+          ];
+          const allTargets = [...targetColors, ...corners];
+
+          const dist = (r1,g1,b1,r2,g2,b2) => Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2);
+
+          for (let i = 0; i < d.length; i += 4) {
+            const minD = Math.min(...allTargets.map(c => dist(d[i],d[i+1],d[i+2],c.r,c.g,c.b)));
+            if (minD < threshold) {
+              d[i+3] = 0;
+            } else if (minD < threshold + 20) {
+              d[i+3] = Math.round(((minD - threshold) / 20) * 255);
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = croppedBase64;
+      });
+
+      setOnboardAvatar(finalAvatar);
+    } catch (err) {
+      console.error('[Onboard AI BG]', err);
+      // Fallback: use plain crop without AI removal
+      setOnboardAvatar(croppedBase64);
+    } finally {
+      setIsAIProcessing(false);
+    }
   };
 
   const handleOnboardingSubmit = async () => {
@@ -739,6 +811,17 @@ function App() {
             <div>
               <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '16px', fontFamily: 'var(--font-heading)' }}>3. Foto & Estilo de Tarjeta</h3>
 
+              {/* AI Processing loading screen */}
+              {isAIProcessing && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '16px' }}>
+                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: '3px solid rgba(195,244,0,0.15)', borderTop: '3px solid var(--primary)', animation: 'spin 0.9s linear infinite' }} />
+                  <div style={{ textAlign: 'center' }}>
+                    <p style={{ color: 'var(--primary)', fontWeight: 'bold', fontSize: '14px', margin: '0 0 6px 0', fontFamily: 'var(--font-heading)' }}>✨ Analizando tu foto con IA</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: 0 }}>Gemini está eliminando el fondo automáticamente…</p>
+                  </div>
+                </div>
+              )}
+
               {rawUploadedImage ? (
                 /* Custom shape crop editor (Hides the rest of step 3 to save space) */
                 <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '14px' }}>
@@ -807,15 +890,17 @@ function App() {
                       onClick={() => setRawUploadedImage(null)} 
                       className="btn-secondary" 
                       style={{ flex: 1, padding: '10px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff' }}
+                      disabled={isAIProcessing}
                     >
                       Cancelar
                     </button>
                     <button 
                       onClick={handleCropApply} 
                       className="btn-primary" 
-                      style={{ flex: 2, padding: '10px', fontSize: '12px', fontWeight: 'bold' }}
+                      style={{ flex: 2, padding: '10px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      disabled={isAIProcessing}
                     >
-                      ✂️ Guardar Recorte
+                      ✂️ Guardar y Eliminar Fondo IA
                     </button>
                   </div>
                 </div>
