@@ -139,9 +139,9 @@ function App() {
   useEffect(() => {
     if (!activeUser || !activeUser.email) return;
     
-    const savedDraft = localStorage.getItem('futcard_onboarding_draft_' + activeUser.email);
-    if (savedDraft) {
-      try {
+    try {
+      const savedDraft = localStorage.getItem('futcard_onboarding_draft_' + activeUser.email);
+      if (savedDraft) {
         const draft = JSON.parse(savedDraft);
         if (draft.step) setOnboardingStep(draft.step);
         if (draft.position) setOnboardPosition(draft.position);
@@ -155,9 +155,9 @@ function App() {
         if (draft.phy) setOnboardPhy(draft.phy);
         if (draft.avatar) setOnboardAvatar(draft.avatar);
         if (draft.theme) setOnboardTheme(draft.theme);
-      } catch (e) {
-        console.error("Failed to parse onboarding draft", e);
       }
+    } catch (e) {
+      console.error("Failed to read onboarding draft from localStorage:", e);
     }
   }, [activeUser]);
 
@@ -165,22 +165,26 @@ function App() {
   useEffect(() => {
     if (!activeUser || !activeUser.email || !showOnboarding) return;
     
-    const draft = {
-      step: onboardingStep,
-      position: onboardPosition,
-      club: onboardClub,
-      nationality: onboardNationality,
-      pac: onboardPac,
-      sho: onboardSho,
-      pas: onboardPas,
-      dri: onboardDri,
-      def: onboardDef,
-      phy: onboardPhy,
-      avatar: onboardAvatar,
-      theme: onboardTheme
-    };
-    
-    localStorage.setItem('futcard_onboarding_draft_' + activeUser.email, JSON.stringify(draft));
+    try {
+      const draft = {
+        step: onboardingStep,
+        position: onboardPosition,
+        club: onboardClub,
+        nationality: onboardNationality,
+        pac: onboardPac,
+        sho: onboardSho,
+        pas: onboardPas,
+        dri: onboardDri,
+        def: onboardDef,
+        phy: onboardPhy,
+        avatar: onboardAvatar,
+        theme: onboardTheme
+      };
+      
+      localStorage.setItem('futcard_onboarding_draft_' + activeUser.email, JSON.stringify(draft));
+    } catch (e) {
+      console.error("Failed to save onboarding draft to localStorage:", e);
+    }
   }, [
     onboardingStep,
     onboardPosition,
@@ -385,7 +389,7 @@ function App() {
 
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
-      setOnboardAvatar(canvas.toDataURL('image/png'));
+      setOnboardAvatar(canvas.toDataURL('image/jpeg', 0.85));
       setRawUploadedImage(null); // Close crop editor
       setCropZoom(1); // Reset
       setCropOffsetX(0);
@@ -748,16 +752,38 @@ function App() {
                       onChange={(e) => {
                         const file = e.target.files[0];
                         if (file) {
-                          if (file.size > 2800000) {
-                            alert("La imagen supera el límite de peso de 2MB para evitar saturación de red.");
+                          if (file.size > 20000000) {
+                            alert("La imagen supera el límite de peso de 20MB.");
                             return;
                           }
                           const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setRawUploadedImage(reader.result);
-                            setCropZoom(1);
-                            setCropOffsetX(0);
-                            setCropOffsetY(0);
+                          reader.onload = (event) => {
+                            const img = new Image();
+                            img.onload = () => {
+                              const maxDim = 800;
+                              let width = img.width;
+                              let height = img.height;
+                              if (width > maxDim || height > maxDim) {
+                                if (width > height) {
+                                  height = Math.round((height * maxDim) / width);
+                                  width = maxDim;
+                                } else {
+                                  width = Math.round((width * maxDim) / height);
+                                  height = maxDim;
+                                }
+                              }
+                              const canvas = document.createElement('canvas');
+                              canvas.width = width;
+                              canvas.height = height;
+                              const ctx = canvas.getContext('2d');
+                              ctx.drawImage(img, 0, 0, width, height);
+                              
+                              setRawUploadedImage(canvas.toDataURL('image/jpeg', 0.8));
+                              setCropZoom(1);
+                              setCropOffsetX(0);
+                              setCropOffsetY(0);
+                            };
+                            img.src = event.target.result;
                           };
                           reader.readAsDataURL(file);
                         }
