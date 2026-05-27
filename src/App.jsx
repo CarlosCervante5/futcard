@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ShieldCheck, Compass, Star, User, Sliders, Sparkles, RefreshCw, X, Award, Eye, EyeOff } from 'lucide-react';
 import { getAppData, saveAppData, resetAppData } from './data/mockData';
 import PlayerCard from './components/PlayerCard';
@@ -78,6 +78,86 @@ function App() {
   const [cropZoom, setCropZoom] = useState(1);
   const [cropOffsetX, setCropOffsetX] = useState(0);
   const [cropOffsetY, setCropOffsetY] = useState(0);
+
+  // Live camera stream states and handlers
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
+  const videoRef = useRef(null);
+
+  const startCamera = async () => {
+    try {
+      setIsCameraActive(true);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 800 }, height: { ideal: 800 } },
+        audio: false
+      });
+      setCameraStream(stream);
+      // Wait for a brief React render frame cycle to ensure video ref is mounted
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      alert("No se pudo acceder a la cámara. Asegúrate de otorgar los permisos necesarios.");
+      setIsCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    setIsCameraActive(false);
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current) {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      
+      const width = video.videoWidth || 800;
+      const height = video.videoHeight || 800;
+      canvas.width = width;
+      canvas.height = height;
+      
+      const ctx = canvas.getContext('2d');
+      // Mirror image for selfie capturing comfort
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, width, height);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      
+      const maxDim = 800;
+      let targetW = width;
+      let targetH = height;
+      if (targetW > maxDim || targetH > maxDim) {
+        if (targetW > targetH) {
+          targetH = Math.round((targetH * maxDim) / targetW);
+          targetW = maxDim;
+        } else {
+          targetW = Math.round((targetW * maxDim) / targetH);
+          targetH = maxDim;
+        }
+      }
+      
+      const compressCanvas = document.createElement('canvas');
+      compressCanvas.width = targetW;
+      compressCanvas.height = targetH;
+      const compressCtx = compressCanvas.getContext('2d');
+      compressCtx.drawImage(canvas, 0, 0, targetW, targetH);
+      
+      const compressedData = compressCanvas.toDataURL('image/jpeg', 0.8);
+      setRawUploadedImage(compressedData);
+      setCropZoom(1);
+      setCropOffsetX(0);
+      setCropOffsetY(0);
+      
+      stopCamera();
+    }
+  };
 
   // Initialize and check for WhatsApp share params in URL query
   useEffect(() => {
@@ -739,58 +819,67 @@ function App() {
                     </button>
                   </div>
                 </div>
+              ) : isCameraActive ? (
+                /* Live Camera Feed inside the App with Silhouette Overlay */
+                <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', padding: '16px', borderRadius: '8px', marginBottom: '14px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#fff', fontWeight: 'bold', width: '100%', textAlign: 'left' }}>Encuadra tu Foto de Hombros Para Arriba</h4>
+                  
+                  {/* Video viewport with neon contour guide overlay */}
+                  <div style={{ width: '200px', height: '200px', borderRadius: '8px', border: '2px solid var(--primary)', background: '#000', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px rgba(195, 244, 0, 0.3)', marginBottom: '12px' }}>
+                    
+                    {/* Live HTML5 video element */}
+                    <video 
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        objectFit: 'cover',
+                        transform: 'scaleX(-1)' // Mirror video feed live
+                      }} 
+                    />
+                    
+                    {/* Silhouette shape overlay guide (head and shoulders contour) */}
+                    <svg viewBox="0 0 100 100" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 5 }}>
+                      {/* Semi-transparent overlay outside the outline */}
+                      <path d="M0,0 H100 V100 H0 Z M50,15 C41.7,15 35,21.7 35,30 C35,38.3 41.7,45 50,45 C58.3,45 65,38.3 65,30 C65,21.7 58.3,15 50,15 Z M15,85 C15,69.5 27.5,57 43,55.5 C43.5,55.4 44,55 44,54.5 V48 C42,47 41,45 41,42 C41,40 42,39 42,39 C42,39 43,35 43,32 H57 C57,35 58,39 58,39 C58,39 59,40 59,42 C59,45 58,47 56,48 V54.5 C56,55 56.5,55.4 57,55.5 C72.5,57 85,69.5 85,85 Z" fill="rgba(12,15,15,0.7)" fillRule="evenodd" />
+                      {/* Glowing neon outline border */}
+                      <path d="M50,15 C41.7,15 35,21.7 35,30 C35,38.3 41.7,45 50,45 C58.3,45 65,38.3 65,30 C65,21.7 58.3,15 50,15 Z M15,85 C15,69.5 27.5,57 43,55.5 C43.5,55.4 44,55 44,54.5 V48 C42,47 41,45 41,42 C41,40 42,39 42,39 C42,39 43,35 43,32 H57 C57,35 58,39 58,39 C58,39 59,40 59,42 C59,45 58,47 56,48 V54.5 C56,55 56.5,55.4 57,55.5 C72.5,57 85,69.5 85,85 Z" stroke="var(--primary)" strokeWidth="1.5" stroke-dasharray="3,3" fill="none" style={{ filter: 'drop-shadow(0 0 5px var(--primary))' }} />
+                    </svg>
+                  </div>
+                  
+                  <p style={{ fontSize: '10px', color: 'var(--text-muted)', margin: '0 0 16px 0', textAlign: 'center' }}>
+                    Sitúate frente a la cámara y alinea tu cabeza y hombros con la silueta antes de capturar.
+                  </p>
+                  
+                  {/* Camera action buttons */}
+                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                    <button 
+                      onClick={stopCamera} 
+                      className="btn-secondary" 
+                      style={{ flex: 1, padding: '10px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff' }}
+                    >
+                      ✕ Cancelar
+                    </button>
+                    <button 
+                      onClick={capturePhoto} 
+                      className="btn-primary" 
+                      style={{ flex: 2, padding: '10px', fontSize: '12px', fontWeight: 'bold' }}
+                    >
+                      📸 Capturar Foto
+                    </button>
+                  </div>
+                </div>
               ) : (
-                /* Normal Upload Dropzone */
+                /* Normal Upload Dropzone / Choice Panel */
                 <>
                   <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>Foto de tu Ficha</label>
                   
-                  {/* Premium Drag & Drop / File Upload Component with preview capability */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.15)', borderRadius: '8px', padding: '18px', marginBottom: '14px', position: 'relative', cursor: 'pointer', textAlign: 'center' }}>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          if (file.size > 20000000) {
-                            alert("La imagen supera el límite de peso de 20MB.");
-                            return;
-                          }
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            const img = new Image();
-                            img.onload = () => {
-                              const maxDim = 800;
-                              let width = img.width;
-                              let height = img.height;
-                              if (width > maxDim || height > maxDim) {
-                                if (width > height) {
-                                  height = Math.round((height * maxDim) / width);
-                                  width = maxDim;
-                                } else {
-                                  width = Math.round((width * maxDim) / height);
-                                  height = maxDim;
-                                }
-                              }
-                              const canvas = document.createElement('canvas');
-                              canvas.width = width;
-                              canvas.height = height;
-                              const ctx = canvas.getContext('2d');
-                              ctx.drawImage(img, 0, 0, width, height);
-                              
-                              setRawUploadedImage(canvas.toDataURL('image/jpeg', 0.8));
-                              setCropZoom(1);
-                              setCropOffsetX(0);
-                              setCropOffsetY(0);
-                            };
-                            img.src = event.target.result;
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }} 
-                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', zIndex: 10 }} 
-                    />
-                    {onboardAvatar ? (
+                  {onboardAvatar ? (
+                    /* Display current avatar with option to remove */
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '18px', marginBottom: '14px', position: 'relative', textAlign: 'center' }}>
                       <div style={{ position: 'relative', zIndex: 12 }}>
                         <img src={onboardAvatar} alt="Foto cargada" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary)', boxShadow: '0 0 12px rgba(195, 244, 0, 0.4)', marginBottom: '8px' }} />
                         <button 
@@ -801,14 +890,80 @@ function App() {
                         </button>
                         <span style={{ fontSize: '11px', color: '#10b981', fontWeight: '500', display: 'block' }}>¡Imagen Cargada!</span>
                       </div>
-                    ) : (
-                      <div style={{ zIndex: 5 }}>
-                        <span style={{ fontSize: '28px', display: 'block', marginBottom: '6px' }}>📸</span>
-                        <span style={{ fontSize: '12px', color: '#fff', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Subir Foto o Tomar Captura</span>
-                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', display: 'block' }}>Toca para usar tu galería o cámara (Máx 2MB)</span>
+                    </div>
+                  ) : (
+                    /* Clean Choice Stack: Live Camera vs Gallery Selector */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        {/* Option A: In-app Live Camera */}
+                        <button
+                          type="button"
+                          onClick={startCamera}
+                          className="btn-primary"
+                          style={{ flex: 1, padding: '16px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', borderRadius: '8px', cursor: 'pointer' }}
+                        >
+                          <span style={{ fontSize: '22px' }}>🎥</span>
+                          <span style={{ fontWeight: 'bold' }}>Cámara en Vivo</span>
+                        </button>
+
+                        {/* Option B: Gallery Selector Fallback */}
+                        <div style={{ flex: 1, position: 'relative', overflow: 'hidden', borderRadius: '8px' }}>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            style={{ width: '100%', height: '100%', padding: '16px 10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '8px', cursor: 'pointer' }}
+                          >
+                            <span style={{ fontSize: '22px' }}>📁</span>
+                            <span style={{ fontWeight: 'bold' }}>Galería de Fotos</span>
+                          </button>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={(e) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                if (file.size > 20000000) {
+                                  alert("La imagen supera el límite de peso de 20MB.");
+                                  return;
+                                }
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const img = new Image();
+                                  img.onload = () => {
+                                    const maxDim = 800;
+                                    let width = img.width;
+                                    let height = img.height;
+                                    if (width > maxDim || height > maxDim) {
+                                      if (width > height) {
+                                        height = Math.round((height * maxDim) / width);
+                                        width = maxDim;
+                                      } else {
+                                        width = Math.round((width * maxDim) / height);
+                                        height = maxDim;
+                                      }
+                                    }
+                                    const canvas = document.createElement('canvas');
+                                    canvas.width = width;
+                                    canvas.height = height;
+                                    const ctx = canvas.getContext('2d');
+                                    ctx.drawImage(img, 0, 0, width, height);
+                                    
+                                    setRawUploadedImage(canvas.toDataURL('image/jpeg', 0.8));
+                                    setCropZoom(1);
+                                    setCropOffsetX(0);
+                                    setCropOffsetY(0);
+                                  };
+                                  img.src = event.target.result;
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }} 
+                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer' }} 
+                          />
+                        </div>
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* Extra fallback option to manually type the image URL */}
                   <details style={{ marginBottom: '14px', width: '100%' }}>
