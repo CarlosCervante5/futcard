@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>FutCard Pro necesita acceder a la cámara para tomar la foto de tu ficha de jugador en vivo con la silueta de encuadre.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FutCard Pro necesita acceder a tu galería para permitirte subir la foto de tu ficha de jugador.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>FutCard Pro necesita acceder a tu galería para guardar y descargar el diseño de tu tarjeta deportiva.</string>
 </dict>
 </plist>
