@@ -135,6 +135,69 @@ function App() {
     }
   }, [db.players, activeUser, authToken]);
 
+  // Onboarding draft loader
+  useEffect(() => {
+    if (!activeUser || !activeUser.email) return;
+    
+    const savedDraft = localStorage.getItem('futcard_onboarding_draft_' + activeUser.email);
+    if (savedDraft) {
+      try {
+        const draft = JSON.parse(savedDraft);
+        if (draft.step) setOnboardingStep(draft.step);
+        if (draft.position) setOnboardPosition(draft.position);
+        if (draft.club) setOnboardClub(draft.club);
+        if (draft.nationality) setOnboardNationality(draft.nationality);
+        if (draft.pac) setOnboardPac(draft.pac);
+        if (draft.sho) setOnboardSho(draft.sho);
+        if (draft.pas) setOnboardPas(draft.pas);
+        if (draft.dri) setOnboardDri(draft.dri);
+        if (draft.def) setOnboardDef(draft.def);
+        if (draft.phy) setOnboardPhy(draft.phy);
+        if (draft.avatar) setOnboardAvatar(draft.avatar);
+        if (draft.theme) setOnboardTheme(draft.theme);
+      } catch (e) {
+        console.error("Failed to parse onboarding draft", e);
+      }
+    }
+  }, [activeUser]);
+
+  // Onboarding draft auto-saver
+  useEffect(() => {
+    if (!activeUser || !activeUser.email || !showOnboarding) return;
+    
+    const draft = {
+      step: onboardingStep,
+      position: onboardPosition,
+      club: onboardClub,
+      nationality: onboardNationality,
+      pac: onboardPac,
+      sho: onboardSho,
+      pas: onboardPas,
+      dri: onboardDri,
+      def: onboardDef,
+      phy: onboardPhy,
+      avatar: onboardAvatar,
+      theme: onboardTheme
+    };
+    
+    localStorage.setItem('futcard_onboarding_draft_' + activeUser.email, JSON.stringify(draft));
+  }, [
+    onboardingStep,
+    onboardPosition,
+    onboardClub,
+    onboardNationality,
+    onboardPac,
+    onboardSho,
+    onboardPas,
+    onboardDri,
+    onboardDef,
+    onboardPhy,
+    onboardAvatar,
+    onboardTheme,
+    activeUser,
+    showOnboarding
+  ]);
+
   const handleUpdatePlayer = (updatedPlayer) => {
     const nextPlayers = db.players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p);
     const nextDb = { ...db, players: nextPlayers };
@@ -362,6 +425,9 @@ function App() {
         body: JSON.stringify(newPlayer)
       });
       if (res.ok) {
+        // Clear onboarding draft from localStorage!
+        localStorage.removeItem('futcard_onboarding_draft_' + activeUser.email);
+
         // Refetch federation data to include the new player
         const refetchRes = await fetch(`${API_BASE_URL}/api/federation`, {
           headers: { 'Authorization': `Bearer ${authToken}` }
