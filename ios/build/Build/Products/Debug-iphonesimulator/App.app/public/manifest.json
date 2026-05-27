@@ -1,0 +1,29 @@
+{
+  "short_name": "FutCard Pro",
+  "name": "FutCard Pro - Perfiles e Identidad de Fútbol",
+  "description": "Crea tu perfil, genera tu tarjeta con IA, registra tu historial de equipos y acumula avales de ligas, DTs y árbitros.",
+  "icons": [
+    {
+      "src": "/src/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "/src/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/src/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#060913",
+  "theme_color": "#10b981",
+  "display": "standalone",
+  "orientation": "portrait"
+}

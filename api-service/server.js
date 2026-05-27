@@ -7,6 +7,8 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
+const cookieParser = require('cookie-parser');
+const nodemailer = require('nodemailer');
 
 const { readDb, writeDb, DEFAULT_PLAYERS, DEFAULT_DTS, DEFAULT_REFEREES, DEFAULT_LEAGUES, DEFAULT_BACKGROUNDS } = require('./db');
 
@@ -51,6 +53,7 @@ app.use(cors({
     } else {
       callback(new Error('Blocked by CORS policy'));
     }
+    }
   },
   credentials: true
 }));
@@ -62,6 +65,8 @@ const apiLimiter = rateLimit({
   message: { error: 'Demasiadas solicitudes desde esta dirección IP. Por favor reintente en 15 minutos.' }
 });
 app.use(apiLimiter);
+// Parse cookies for session management
+app.use(cookieParser());
 
 // JWT Middleware: Authenticate administrator sessions (Fail Close)
 function authenticateToken(req, res, next) {
@@ -84,6 +89,64 @@ function logAuditAction(email, action) {
     id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
     timestamp: new Date().toISOString(),
     email: email || 'Sistema',
+    action,
+  };
+  dbData.auditLogs = [logEntry, ...(dbData.auditLogs || [])];
+  writeDb(dbData);
+}
+
+// CSRF double‑submit cookie protection
+function csrfProtection(req, res, next) {
+  const headerToken = req.headers['x-csrf-token'];
+  const cookieToken = req.cookies['csrfToken'];
+  if (!headerToken || !cookieToken || headerToken !== cookieToken) {
+    return res.status(403).json({ error: 'CSRF validation failed.' });
+  }
+  next();
+}
+
+// Generate CSRF token for authenticated sessions
+function setCsrfCookie(res) {
+  const token = crypto.randomBytes(24).toString('hex');
+  res.cookie('csrfToken', token, { httpOnly: false, secure: true, sameSite: 'Strict' });
+}
+
+// Email service (nodemailer transport)
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'localhost',
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+  },
+});
+function sendVerificationEmail(toEmail, token) {
+  const verificationUrl = `${process.env.VERIFICATION_BASE_URL || 'http://localhost:5173'}/verify?token=${token}`;
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'no-reply@example.com',
+    to: toEmail,
+    subject: 'Verify your FutCard Pro account',
+    text: `Please verify your account by clicking the link: ${verificationUrl}`,
+    html: `<p>Please verify your account by clicking the link:</p><p><a href="${verificationUrl}">Verify Email</a></p>`,
+  };
+  return transporter.sendMail(mailOptions);
+}
+
+// In‑memory resend counter (email => { count, resetTime })
+const resendTracker = {};
+function canResend(email) {
+  const now = Date.now();
+  const record = resendTracker[email] || { count: 0, resetTime: now + 60 * 60 * 1000 };
+  if (now > record.resetTime) {
+    record.count = 0;
+    record.resetTime = now + 60 * 60 * 1000;
+  }
+  if (record.count >= 3) return false;
+  record.count += 1;
+  resendTracker[email] = record;
+  return true;
+}
     action: action
   };
   dbData.auditLogs = [logEntry, ...(dbData.auditLogs || [])];
@@ -102,18 +165,48 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   const dbData = readDb();
-  const admin = dbData.admins.find(a => a.email.toLowerCase() === email.toLowerCase() && a.password === password);
-
+  const admin = dbData.admins.find(a => a.email.toLowerCase() === email.toLowerCase());
   if (!admin) {
     return res.status(401).json({ error: 'Credenciales incorrectas. Verifica tus datos.' });
   }
+  // Verify password (plain for demo, hash in prod)
+  const passwordMatches = admin.password === password;
+  if (!passwordMatches) {
+    return res.status(401).json({ error: 'Credenciales incorrectas.' });
+  }
 
-  // Sign dynamic JWT token valid for 24 hours
   const userPayload = { id: admin.id, name: admin.name, email: admin.email, role: admin.role };
   const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '24h' });
-
+  // Set HttpOnly Secure SameSite cookie
+  res.cookie('__Host-auth', token, { httpOnly: true, secure: true, sameSite: 'Strict', path: '/' });
+  // Set CSRF token cookie for subsequent state‑changing requests
+  setCsrfCookie(res);
   logAuditAction(admin.email, `Inicio de sesión exitoso en el portal administrativo`);
-  res.json({ token, user: userPayload });
+  res.json({ user: userPayload, token });
+});
+
+// Register new admin (simple password storage)
+app.post('/api/auth/register', (req, res) => {
+  const { name, email, password, role } = req.body;
+  if (!name || !email || !password || !role) {
+    return res.status(400).json({ error: 'Completa todos los campos obligatorios.' });
+  }
+  const dbData = readDb();
+  if (dbData.admins.some(a => a.email.toLowerCase() === email.toLowerCase())) {
+    return res.status(400).json({ error: 'Este correo ya está registrado.' });
+  }
+  const newAdmin = {
+    id: `admin-${Date.now()}`,
+    name,
+    email,
+    password, // plain password for demo
+    role,
+  };
+  dbData.admins.push(newAdmin);
+  writeDb(dbData);
+
+  logAuditAction(email, `Registro de nuevo administrador`);
+  res.status(201).json({ success: true, message: 'Registro exitoso.' });
 });
 
 // ==========================================
